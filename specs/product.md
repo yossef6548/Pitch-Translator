@@ -58,14 +58,14 @@ A cross-platform, real-time pitch perception and pitch production training syste
 
 * iOS (iPhone + iPad)
 * Android
-* Desktop optional (macOS/Windows) for advanced practice, using native audio APIs.
+
+Pitch Translator is **mobile-only**. No desktop application is in scope for this repository/spec set.
 
 ### 3.2 Hardware requirements
 
-* Microphone access
+* Microphone access (required)
 * Optional: headphones strongly recommended for certain modes
-* Optional: Bluetooth MIDI device for reference / external input
-* Optional: wearables (Apple Watch) for haptic feedback (phase 2, but designed now)
+* Optional: Bluetooth MIDI device for reference / external input (future-proofed, not required for initial implementation)
 
 ---
 
@@ -220,20 +220,16 @@ All can be toggled, but default is ON:
 
 ### 8.1.3 Control elements
 
-* Start/Stop
+* Start / Pause / Stop / Restart / Exit
 * Input source selector:
-
-  * Microphone
-  * System audio (desktop)
-  * Imported track analysis (offline)
+  * Microphone (live)
+  * Imported audio file analysis (offline) — from Library → Imported Audio
 * Reference playback:
-
   * On/Off
   * Volume
   * Type (sine / piano / choir / instrument)
 * Latency compensation toggle (auto/manual)
 * “Lock threshold” quick selector:
-
   * Strict (±10c)
   * Standard (±20c)
   * Lenient (±35c)
@@ -274,13 +270,17 @@ Maintain a single pitch with maximum stability.
 
 ## 8.3 Drift Awareness Mode (your “main fix”)
 
-### 8.3.1 Drift definition
+### 8.3.1 Drift definition (authoritative)
 
 A drift event occurs when:
 
-* user was locked for at least **500 ms**, then
-* deviates beyond drift_threshold (default ±25c) for at least **250 ms**, and
-* pitch change persists or increases.
+1) The user has been in `LOCKED` state for at least `LOCK_REQUIRED_BEFORE_DRIFT_MS`, then  
+2) `abs(effective_error) > DRIFT_THRESHOLD_CENTS` continuously for at least `DRIFT_CONFIRM_TIME_MS`.
+
+Notes:
+* `DRIFT_THRESHOLD_CENTS` is provided by the **exercise configuration** (defaults depend on difficulty level as defined in `exercises.md`).
+* `effective_error` is defined in `dsp-ui-binding.md` (vibrato-aware).
+* All timing constants are defined in `dsp-ui-binding.md` under “Global Defaults & Constants”.
 
 ### 8.3.2 Detection requirements
 
@@ -601,7 +601,7 @@ Compute short-time pitch modulation:
 * drift threshold
 * lock acquisition time
 * vibrato depth tolerance
-* smoothing level (low/med/high)
+* smoothing level (low/med/high) — DSP-side only, must remain deterministic and must not modify DSP → UI binding math
 
 ### 11.2 Representation settings
 
@@ -699,5 +699,6 @@ Transitions determined by:
   * std dev ≤ 12 cents
   * max drift events ≤ 1
 * Group Unison Mastery:
+
 
   * 80% within ±25c for 30 sec
