@@ -366,7 +366,10 @@ For each audio frame:
 
 * Condition:
 
-  * confidence < minConfidence
+  * confidence < MIN_CONFIDENCE, OR
+  * freq is null, OR
+  * cents is null, OR
+  * nearestMidi is null
 * Visual:
 
   * desaturation
@@ -544,5 +547,6 @@ For each audio frame:
 | Lock       | All modes      | Same visual     |
 | Pitch Line | Everywhere     | Same behavior   |
 | Replay     | Live + Analyze | Same UI         |
+
 
 No special cases.
