@@ -72,13 +72,11 @@ Tablets supported automatically via responsive UI.
 
 ### Responsibilities
 
-* Audio frame processing
+* Audio frame processing (real-time safe)
 * Pitch detection
 * Confidence estimation
 * Vibrato detection
-* Lock / drift state machine
-* Metric accumulation
-* Deterministic output frames
+* Deterministic DSP frame output (per `dsp-ui-binding.md`)
 
 ### Explicitly NOT responsible for
 
@@ -184,8 +182,8 @@ Audio Flow mirrors iOS exactly.
 
 * Audio timing
 * Pitch detection
-* Drift logic
-* Metric computation
+* DSP confidence/vibrato classification
+* Lock/drift threshold definitions (these come from specs + exercise config)
 
 ---
 
@@ -239,6 +237,7 @@ Training Engine:
 * consumes DSP frames
 * applies exercise rules
 * emits state transitions (LOCKED, DRIFT, etc.)
+  The Training Engine owns the Live Pitch state machine defined in `interaction.md` and uses the constants in `dsp-ui-binding.md`.
 
 ---
 
@@ -382,4 +381,5 @@ Without changing:
 | DSP math           | ✅       |
 | QA reproducibility | ✅       |
 | Offline support    | ✅       |
+
 
