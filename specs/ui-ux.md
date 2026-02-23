@@ -385,14 +385,17 @@ Displays:
 
 ### 5.3 States (Mandatory)
 
-| State           | Visual Behavior             |
-| --------------- | --------------------------- |
-| Idle            | Neutral gray, no halo       |
-| Seeking Lock    | Pulsing halo                |
-| Locked          | Solid color, rigid shape    |
-| Drift Candidate | Shape tremble               |
-| Drift Confirmed | Shape fracture + screen dim |
-| Low Confidence  | Desaturated + “?” icon      |
+| State           | Visual Behavior                                                                 |
+|----------------|----------------------------------------------------------------------------------|
+| Idle           | Neutral gray, no halo. Controls visible.                                         |
+| Countdown      | Large countdown numerals. Pitch feedback hidden.                                  |
+| Seeking Lock   | Pulsing halo. Shape semi-transparent until first confident pitch frame.          |
+| Locked         | Solid pitch color, rigid shape, stable halo.                                      |
+| Drift Candidate| Shape tremble + halo flicker (intensity proportional to error).                  |
+| Drift Confirmed| Shape fracture + screen dim + (if in Drift Awareness) transition to DRIFT_REPLAY.|
+| Low Confidence | Desaturated + “?” icon. Error readout hidden. Scoring paused.                    |
+| Paused         | Screen dim overlay. Shape frozen. Scoring paused.                                |
+| Completed      | Summary overlay + CTA to Analyze / Retry / Next.                                  |
 
 ---
 
@@ -609,5 +612,6 @@ Warning shown:
 | Numeric index     | MIDI                 |
 | Live pitch screen | LIVE_PITCH           |
 | Replay            | DRIFT_REPLAY         |
+
 
 No synonyms allowed in UI strings.
