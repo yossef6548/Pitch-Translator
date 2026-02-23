@@ -107,7 +107,7 @@ QA must be able to read:
 
 * cents_error = +5c
 * confidence = 0.9
-* duration = LOCK_ACQUIRE_TIME + 100 ms
+* duration = LOCK_ACQUIRE_TIME_MS + 100 ms  (LOCK_ACQUIRE_TIME_MS = 300 ms)
 
 **Expected**
 
@@ -184,7 +184,7 @@ QA must be able to read:
 **Input**
 
 * Locked
-* cents_error = +40c for DRIFT_CONFIRM_TIME
+* cents_error = +40c for DRIFT_CONFIRM_TIME_MS  (DRIFT_CONFIRM_TIME_MS = 250 ms)
 
 **Expected**
 
@@ -442,7 +442,7 @@ QA must be able to read:
 
 **Input**
 
-* abs_error = DRIFT_THRESHOLD
+* abs_error = DRIFT_THRESHOLD_CENTS (from exercise config)
 
 **Expected**
 
@@ -490,4 +490,5 @@ App **cannot ship** if:
 * Any test above fails
 * Same DSP trace produces different UI on different devices
 * Drift misfires under valid vibrato
+
 * LOW_CONFIDENCE does not override state machine
