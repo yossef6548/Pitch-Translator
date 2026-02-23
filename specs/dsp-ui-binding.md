@@ -5,6 +5,42 @@
 
 ---
 
+## 0.1 Global Defaults & Constants (Authoritative)
+
+All constants below are global defaults unless overridden by an exercise configuration.
+
+```text
+# Confidence
+MIN_CONFIDENCE = 0.60
+RECOVERY_CONFIDENCE = 0.65
+
+# Lock / Drift timing
+LOCK_ACQUIRE_TIME_MS = 300
+LOCK_REQUIRED_BEFORE_DRIFT_MS = 500
+DRIFT_CANDIDATE_TIME_MS = 200
+DRIFT_CONFIRM_TIME_MS = 250
+
+# Vibrato
+VIBRATO_DEPTH_LIMIT = 30 cents
+VIBRATO_RATE_RANGE_HZ = 4–8 Hz
+EFFECTIVE_ERROR_WINDOW_MS = 150
+
+# Pitch error clamping
+CENTS_ERROR_CLAMP = ±50
+````
+
+Authority rules:
+
+* DSP outputs **pitch/confidence/vibrato** only (per “DSP Output Contract”).
+* The **lock/drift state machine** (IDLE/COUNTDOWN/SEEKING_LOCK/LOCKED/DRIFT_*) is owned by the **Training Engine** using:
+
+  * DSP frames
+  * exercise config
+  * the constants in this section
+* `DRIFT_THRESHOLD_CENTS` and `tolerance_cents` come from the current exercise config (defaults per level defined in `exercises.md`).
+
+---
+
 ## 0. DSP Output Contract (Single Source of Truth)
 
 For every processed audio frame, DSP emits **one immutable structure**:
@@ -55,6 +91,10 @@ Rules:
 * Scoring and drift logic are paused
 * Visual feedback continues but muted
 
+Additional rule (authoritative):
+
+* If `freq_hz` is null OR `cents_error` is null OR `nearest_midi` is null, the UI MUST enter `LOW_CONFIDENCE` regardless of numeric confidence, because pitch is not usable.
+
 ### 1.3 LOW_CONFIDENCE Visual Mapping
 
 * Saturation multiplier = `0.30`
@@ -72,13 +112,13 @@ Rules:
 From DSP:
 
 ```text
-cents_error_raw ∈ (-50, +50)
+cents_error_raw ∈ (-CENTS_ERROR_CLAMP, +CENTS_ERROR_CLAMP)
 ```
 
 ### 2.2 Clamped cents error (used everywhere)
 
 ```text
-cents_error = clamp(cents_error_raw, -50, +50)
+cents_error = clamp(cents_error_raw, -CENTS_ERROR_CLAMP, +CENTS_ERROR_CLAMP)
 ```
 
 ### 2.3 Absolute error
@@ -411,4 +451,5 @@ Given:
 * [ ] shape identity preserved under deformation
 * [ ] color saturation follows formula
 * [ ] haptics proportional to error
+
 * [ ] state transitions match Interaction Spec
