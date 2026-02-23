@@ -381,5 +381,5 @@ Without changing:
 | UI state machine   | ✅       |
 | DSP math           | ✅       |
 | QA reproducibility | ✅       |
-
 | Offline support    | ✅       |
+
