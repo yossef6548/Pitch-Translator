@@ -22,7 +22,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Live pitch state IDs and deterministic visual fields
   - Core constants synced to `specs/dsp-ui-binding.md`
 
-- **Training Engine (first production-capable core)**
+- **Training Engine (production-capable deterministic core)**
   - Implemented state machine:
     - `IDLE → COUNTDOWN → SEEKING_LOCK → LOCKED → DRIFT_CANDIDATE → DRIFT_CONFIRMED`
     - `ANY → LOW_CONFIDENCE` override
@@ -41,16 +41,28 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Confidence estimate
   - Basic vibrato heuristic outputs
 
-- **Tests available in repo**
-  - DSP smoke test for synthetic 440Hz signal
-  - Flutter unit tests for core engine transitions
+- **Exercise catalog + progression core (expanded to full spec taxonomy)**
+  - Authoritative mode IDs and level defaults encoded from `specs/exercises.md`
+  - Full exercise catalog now includes all currently defined IDs in spec:
+    - PF: `PF_1..PF_4`
+    - DA: `DA_1..DA_3`
+    - RP: `RP_1..RP_5`
+    - GS: `GS_1..GS_4`
+    - LT: `LT_1..LT_3`
+  - Unlock graph supports:
+    - same-level prerequisite checks per exercise
+    - mode-order progression (`PF → DA → RP → GS → LT`)
+    - level unlock by prior-level mastery ratio (`L2=70%`, `L3=80%`)
 
-- **Exercise catalog + progression core (new)**
-  - Authoritative level defaults and mastery thresholds encoded from `specs/exercises.md`
-  - Unlock graph for PF/DA/RP exercise families with same-level dependency checks
-  - Progression engine that evaluates mastery (`AvgError`, `Stability`, `LockRatio`, `DriftCount`) and persists mastery snapshots in-memory
+- **Adaptive progression rules (implemented from spec section 10/12)**
+  - Tracks per-exercise progress entries (`attempts`, `assisted_attempts`, `mastery_date`, `last_attempt_date`, `best_metrics`, failure streak)
+  - Assisted mode trigger after 3 consecutive failures:
+    - temporary tolerance widening `+5c`
+    - duration scaling `0.8x`
+  - Assisted completions are persisted but do not award mastery credit
+  - Skill-decay refresh flag support for masteries older than 30 days
 
-- **Deterministic QA replay harness (new)**
+- **Deterministic QA replay harness**
   - Reusable `ReplayHarness` that executes recorded `DspFrame` streams against `TrainingEngine`
   - JSONL parser for loading traces from `qa/traces`
   - Automated QA-style tests covering null-pitch low-confidence behavior and drift-candidate recovery
@@ -59,7 +71,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 
 ## 🚧 What’s still left before true “ship to users”
 
-This section is intentionally explicit so the next developer can finish without reverse-engineering intent.
+This section is intentionally explicit so execution can continue without reverse-engineering intent.
 
 ### 1) Native real-time audio I/O (required for shipping)
 
@@ -94,24 +106,10 @@ This section is intentionally explicit so the next developer can finish without 
 - Add all mandatory IDs and edge states (mic permission, noise warning, low confidence UI treatment, paused/completed overlays).
 - Apply design-system tokens (color roles, typography, spacing, motion curves) instead of ad-hoc widget styling.
 
-### 3) Exercise catalog + progression engine
-
-**Current status**
-- Implemented for PF/DA/RP exercises in Flutter domain layer:
-  - mode and level enums
-  - level defaults (`L1/L2/L3`)
-  - mastery thresholds
-  - unlock dependency graph
-  - progression updates based on session metrics
-
-**Still required before ship**
-- Wire catalog/progression to full Train/Home UX and persistent local storage.
-- Add adaptive recommendations and streak-based weighting.
-- Expand catalog coverage to remaining modes (`MODE_GS`, `MODE_LT`) and remaining RP exercises.
-
-### 4) Persistence and analytics
+### 3) Persistence and analytics
 
 **What is missing**
+- Progression supports in-memory state only.
 - No local DB for sessions, frame aggregates, drift events, mastery history.
 - Analyze screens cannot be completed without this.
 
@@ -121,24 +119,22 @@ This section is intentionally explicit so the next developer can finish without 
   - exercise attempts
   - drift events
   - per-session summary metrics
+  - mastery history entries
 - Persist deterministic aggregates (not raw audio by default).
 - Build query layer for trends, weakness map, and session detail timelines.
 
-### 5) QA replay harness (required for deterministic sign-off)
+### 4) QA replay harness expansion (required for deterministic sign-off)
 
 **Current status**
-- Added a deterministic replay harness in Flutter:
-  - injects frame lists directly into `TrainingEngine`
-  - tracks visited state transitions
-  - parses JSONL traces for fixture-driven testing
-- Added automated scenario tests aligned to spec intent (`QA-G-01`, `QA-DA-01`).
+- Deterministic replay harness and fixture parser are in place.
+- Scenario coverage currently includes low-confidence and drift recovery baselines.
 
 **Still required before ship**
 - Expand scenario matrix to full `specs/qa.md` coverage.
 - Add strict assertions for all visual scalars (`x_offset_px`, saturation, halo, deformation).
 - Integrate replay suite into CI gate.
 
-### 6) DSP hardening for noisy real devices
+### 5) DSP hardening for noisy real devices
 
 **What is missing**
 - Current detector is baseline-quality; not yet robust enough for shipping environments.
@@ -185,25 +181,26 @@ This section is intentionally explicit so the next developer can finish without 
 ### Exercise and progression domain
 
 - `apps/mobile_flutter/lib/exercises/exercise_catalog.dart`
-  - Defines `ModeId`, `LevelId`, defaults, mastery thresholds, and core exercise graph.
-  - Exposes `ExerciseCatalog.unlocked(...)` and `ExerciseDefinition.configForLevel(...)`.
+  - Expanded exercise registry to include full `MODE_RP`, `MODE_GS`, and `MODE_LT` lists from spec.
+  - Added mode sequencing helper to enforce mode unlock order.
+  - Updated unlock filtering to gate by both level unlock and mode unlock.
+
 - `apps/mobile_flutter/lib/exercises/progression_engine.dart`
-  - Defines `SessionMetrics`, `SessionMetricsBuilder`, and `ProgressionEngine`.
-  - Encodes spec mastery conditions and produces updated mastery snapshots.
+  - Added persistent in-memory progression records via `ExerciseProgress`.
+  - Added assisted training support (`AssistAdjustment`) with configurable assist trigger.
+  - Added skill decay refresh evaluation (`needsRefresh`) using 30-day window.
+  - Updated `applyResult` to:
+    - track attempts and assisted attempts
+    - preserve and update best metrics
+    - update failure streaks
+    - deny mastery credit for assisted completions
 
-### QA replay domain
-
-- `apps/mobile_flutter/lib/qa/replay_harness.dart`
-  - Provides deterministic replay execution over `TrainingEngine`.
-  - Includes JSONL parsing helper for trace-based tests.
-
-### Tests added
+### Tests expanded
 
 - `apps/mobile_flutter/test/exercises/progression_engine_test.dart`
-  - Validates level defaults, unlock chain behavior, and mastery gating.
-- `apps/mobile_flutter/test/qa/replay_harness_test.dart`
-  - Validates low-confidence null-pitch behavior and drift recovery transitions.
-  - Validates JSONL parsing on `qa/traces/sample_trace.jsonl`.
+  - Added full-catalog coverage checks and mode unlock-order tests.
+  - Added tests for assisted-attempt behavior and assist trigger after repeated failures.
+  - Added skill-decay refresh test for >30-day mastery age.
 
 ---
 
