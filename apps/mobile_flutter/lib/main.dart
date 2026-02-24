@@ -48,8 +48,13 @@ class _RootFlowState extends State<RootFlow> {
   }
 
   Future<void> _loadOnboardingState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final completed = prefs.getBool(_onboardingCompleteKey) ?? false;
+    var completed = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      completed = prefs.getBool(_onboardingCompleteKey) ?? false;
+    } catch (error) {
+      debugPrint('Failed to load onboarding state: $error');
+    }
     if (!mounted) {
       return;
     }
@@ -60,8 +65,12 @@ class _RootFlowState extends State<RootFlow> {
   }
 
   Future<void> _completeOnboarding() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_onboardingCompleteKey, true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_onboardingCompleteKey, true);
+    } catch (error) {
+      debugPrint('Failed to persist onboarding state: $error');
+    }
     if (!mounted) {
       return;
     }
