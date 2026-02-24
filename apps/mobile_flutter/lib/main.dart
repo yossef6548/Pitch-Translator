@@ -888,7 +888,11 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
   bool _replayOpen = false;
   int? _sessionStartMs;
   final List<double> _absErrors = <double>[];
+  final List<double> _effectiveErrors = <double>[];
   int _driftCount = 0;
+  int _activeTimeMs = 0;
+  int _lockedTimeMs = 0;
+  int? _lastFrameTimestampMs;
   int _lastDriftAfterTimestamp = -1;
 
   @override
@@ -901,8 +905,23 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
       final isTrainingActive = stateId != LivePitchStateId.idle &&
           stateId != LivePitchStateId.paused &&
           stateId != LivePitchStateId.completed;
+      if (_sessionStartMs != null && isTrainingActive) {
+        if (_lastFrameTimestampMs != null) {
+          final deltaMs = math.max(0, frame.timestampMs - _lastFrameTimestampMs!);
+          _activeTimeMs += deltaMs;
+          if (stateId == LivePitchStateId.locked) {
+            _lockedTimeMs += deltaMs;
+          }
+        }
+        _lastFrameTimestampMs = frame.timestampMs;
+      } else {
+        _lastFrameTimestampMs = null;
+      }
+
       if (isTrainingActive && _engine.state.effectiveError != null) {
-        _absErrors.add(_engine.state.effectiveError!.abs());
+        final effectiveError = _engine.state.effectiveError!;
+        _effectiveErrors.add(effectiveError);
+        _absErrors.add(effectiveError.abs());
       }
       final driftEvent = _engine.lastDriftEvent;
       if (isTrainingActive &&
@@ -961,12 +980,19 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     }
     final endedAtMs = DateTime.now().millisecondsSinceEpoch;
     final avgError = _absErrors.reduce((a, b) => a + b) / _absErrors.length;
-    final variance = _absErrors
-            .map((e) => (e - avgError) * (e - avgError))
+    final signedMean = _effectiveErrors.reduce((a, b) => a + b) / _effectiveErrors.length;
+    final variance = _effectiveErrors
+            .map((e) => (e - signedMean) * (e - signedMean))
             .reduce((a, b) => a + b) /
-        _absErrors.length;
+        _effectiveErrors.length;
     final stdDev = math.sqrt(variance);
     final stability = (100 - (stdDev * 3)).clamp(0, 100).toDouble();
+    final lockRatio = _activeTimeMs == 0 ? 0 : _lockedTimeMs / _activeTimeMs;
+    final masteryThreshold = masteryThresholds[widget.level]!;
+    final success = avgError <= masteryThreshold.avgErrorMax &&
+        stdDev <= masteryThreshold.stabilityMax &&
+        lockRatio >= masteryThreshold.lockRatioMin &&
+        _driftCount <= masteryThreshold.driftCountMax;
 
     final sessionId = await SessionRepository.instance.recordSession(
       exerciseId: widget.exercise.id,
@@ -977,7 +1003,6 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
       stabilityScore: stability,
       driftCount: _driftCount,
     );
-    final success = avgError <= widget.config.toleranceCents && _driftCount <= 1;
     await SessionRepository.instance.recordAttempt(
       sessionId: sessionId,
       exerciseId: widget.exercise.id,
@@ -999,7 +1024,11 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     }
     _sessionStartMs = null;
     _absErrors.clear();
+    _effectiveErrors.clear();
     _driftCount = 0;
+    _activeTimeMs = 0;
+    _lockedTimeMs = 0;
+    _lastFrameTimestampMs = null;
     _lastDriftAfterTimestamp = -1;
   }
 
@@ -1049,7 +1078,11 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
                     if (_sessionStartMs == null) {
                       _sessionStartMs = DateTime.now().millisecondsSinceEpoch;
                       _absErrors.clear();
+                      _effectiveErrors.clear();
                       _driftCount = 0;
+                      _activeTimeMs = 0;
+                      _lockedTimeMs = 0;
+                      _lastFrameTimestampMs = null;
                       _lastDriftAfterTimestamp = _sessionStartMs!;
                     }
                     _engine.onIntent(TrainingIntent.start);
