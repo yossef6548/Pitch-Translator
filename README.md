@@ -200,10 +200,32 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Replaced single-screen app entry with a root `AppShell` and persistent 5-tab navigation (`Home`, `Train`, `Analyze`, `Library`, `Settings`).
   - Added `TRAIN_CATALOG` grouping exercises by mode and launching per-mode overviews.
   - Added `MODE_<MODE>_OVERVIEW` and `EXERCISE_CONFIG` flows to align with interaction/ui specs.
-  - Added config handoff from `EXERCISE_CONFIG` into `LIVE_PITCH` so training runs against explicit user-selected tolerances.
+  - Added config handoff from `EXERCISE_CONFIG` into `LIVE_PITCH` so training runs against explicit user-selected tolerances and feedback/session toggles (randomize target, reference tone, numeric overlay, shape warping, color flood, haptics).
   - Added baseline `HOME_TODAY` card stack aligned with spec component IDs.
   - Added Focus-card route directly into configurable exercise setup.
   - Added automatic `DRIFT_REPLAY` modal after drift confirmation in drift-awareness exercises.
+
+
+### Exercise config serialization hardening
+
+- `packages/pt_contracts/lib/src/state.dart`
+  - Expanded `ExerciseConfig` to carry all user-selectable session options from `EXERCISE_CONFIG`:
+    - `randomizeTargetWithinRange`
+    - `referenceToneEnabled`
+    - `showNumericOverlay`
+    - `shapeWarpingEnabled`
+    - `colorFloodEnabled`
+    - `hapticsEnabled`
+- `apps/mobile_flutter/lib/main.dart`
+  - Fixed `Start Exercise` handoff so all exercise setup toggles are preserved when opening `LIVE_PITCH`.
+  - Wired `showNumericOverlay` to `LIVE_PITCH` cents readout visibility to ensure session behavior reflects user selection.
+  - Added a compact session-options status row in `LIVE_PITCH` for deterministic verification of the active run configuration.
+
+### Validation and tooling progress
+
+- Installed Flutter SDK (`3.24.5`) in the development environment to unblock Flutter-native checks that were previously unavailable.
+- Added `apps/mobile_flutter/test/exercise_config_screen_test.dart` widget test to prevent regressions where setup selections are dropped at session start.
+- Updated color alpha call site from `withValues(alpha: ...)` to `withOpacity(...)` for Flutter 3.24 compatibility in this environment.
 
 ### Training engine drift replay capture
 
