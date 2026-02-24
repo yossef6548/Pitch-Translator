@@ -16,6 +16,52 @@ class SessionMetrics {
   });
 }
 
+class AssistAdjustment {
+  final double toleranceDeltaCents;
+  final double durationScale;
+
+  const AssistAdjustment({required this.toleranceDeltaCents, required this.durationScale});
+
+  static const none = AssistAdjustment(toleranceDeltaCents: 0, durationScale: 1);
+}
+
+class ExerciseProgress {
+  final int attempts;
+  final int assistedAttempts;
+  final DateTime? masteryDate;
+  final DateTime? lastAttemptDate;
+  final SessionMetrics? bestMetrics;
+  final int consecutiveFailures;
+
+  const ExerciseProgress({
+    this.attempts = 0,
+    this.assistedAttempts = 0,
+    this.masteryDate,
+    this.lastAttemptDate,
+    this.bestMetrics,
+    this.consecutiveFailures = 0,
+  });
+
+  ExerciseProgress copyWith({
+    int? attempts,
+    int? assistedAttempts,
+    DateTime? masteryDate,
+    bool clearMasteryDate = false,
+    DateTime? lastAttemptDate,
+    SessionMetrics? bestMetrics,
+    int? consecutiveFailures,
+  }) {
+    return ExerciseProgress(
+      attempts: attempts ?? this.attempts,
+      assistedAttempts: assistedAttempts ?? this.assistedAttempts,
+      masteryDate: clearMasteryDate ? null : (masteryDate ?? this.masteryDate),
+      lastAttemptDate: lastAttemptDate ?? this.lastAttemptDate,
+      bestMetrics: bestMetrics ?? this.bestMetrics,
+      consecutiveFailures: consecutiveFailures ?? this.consecutiveFailures,
+    );
+  }
+}
+
 class SessionMetricsBuilder {
   final List<double> _effectiveErrors = [];
   final List<double> _absEffectiveErrors = [];
@@ -57,6 +103,30 @@ class SessionMetricsBuilder {
 }
 
 class ProgressionEngine {
+  static const int failureAssistThreshold = 3;
+  static const Duration skillDecayWindow = Duration(days: 30);
+
+  final Map<String, ExerciseProgress> _exerciseState = {};
+
+  ExerciseProgress progressFor(String exerciseId, LevelId level) {
+    return _exerciseState[_key(exerciseId, level)] ?? const ExerciseProgress();
+  }
+
+  AssistAdjustment assistFor(String exerciseId, LevelId level) {
+    final progress = progressFor(exerciseId, level);
+    if (progress.consecutiveFailures < failureAssistThreshold) {
+      return AssistAdjustment.none;
+    }
+    return const AssistAdjustment(toleranceDeltaCents: 5, durationScale: 0.8);
+  }
+
+  bool needsRefresh(String exerciseId, LevelId level, DateTime now) {
+    final progress = progressFor(exerciseId, level);
+    final masteryDate = progress.masteryDate;
+    if (masteryDate == null) return false;
+    return now.difference(masteryDate) > skillDecayWindow;
+  }
+
   bool isMastered(LevelId level, SessionMetrics metrics) {
     final threshold = masteryThresholds[level]!;
     return metrics.avgError <= threshold.avgErrorMax &&
@@ -70,10 +140,38 @@ class ProgressionEngine {
     required String exerciseId,
     required LevelId level,
     required SessionMetrics metrics,
+    bool assisted = false,
+    DateTime? attemptedAt,
   }) {
-    if (!isMastered(level, metrics)) return snapshot;
-    return ProgressSnapshot(
-      mastered: {...snapshot.mastered, '$exerciseId:${level.name}'},
+    final now = attemptedAt ?? DateTime.now();
+    final progressKey = _key(exerciseId, level);
+    final current = _exerciseState[progressKey] ?? const ExerciseProgress();
+    final mastered = isMastered(level, metrics) && !assisted;
+
+    final bestMetrics = _betterMetrics(current.bestMetrics, metrics);
+    _exerciseState[progressKey] = current.copyWith(
+      attempts: current.attempts + 1,
+      assistedAttempts: current.assistedAttempts + (assisted ? 1 : 0),
+      masteryDate: mastered ? now : current.masteryDate,
+      lastAttemptDate: now,
+      bestMetrics: bestMetrics,
+      consecutiveFailures: mastered ? 0 : current.consecutiveFailures + 1,
     );
+
+    if (!mastered) return snapshot;
+    return ProgressSnapshot(mastered: {...snapshot.mastered, '$exerciseId:${level.name}'});
   }
+
+  SessionMetrics _betterMetrics(SessionMetrics? previous, SessionMetrics candidate) {
+    if (previous == null) return candidate;
+    final previousScore = _qualityScore(previous);
+    final candidateScore = _qualityScore(candidate);
+    return candidateScore <= previousScore ? candidate : previous;
+  }
+
+  double _qualityScore(SessionMetrics metrics) {
+    return metrics.avgError + metrics.stability + (1 - metrics.lockRatio) * 100 + metrics.driftCount * 10;
+  }
+
+  String _key(String exerciseId, LevelId level) => '$exerciseId:${level.name}';
 }

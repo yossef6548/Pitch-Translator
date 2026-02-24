@@ -77,6 +77,14 @@ class ExerciseCatalog {
   static const double _l2UnlockRatio = 0.70;
   static const double _l3UnlockRatio = 0.80;
 
+  static const List<ModeId> modeOrder = [
+    ModeId.modePf,
+    ModeId.modeDa,
+    ModeId.modeRp,
+    ModeId.modeGs,
+    ModeId.modeLt,
+  ];
+
   static final List<ExerciseDefinition> all = [
     ExerciseDefinition(id: 'PF_1', mode: ModeId.modePf, name: 'Single Pitch Hold (Referenced)', unlockRule: (_, __) => true),
     ExerciseDefinition(
@@ -136,6 +144,60 @@ class ExerciseCatalog {
       name: 'Mixed Jumps',
       unlockRule: (s, l) => s.isMastered('RP_2', l),
     ),
+    ExerciseDefinition(
+      id: 'RP_4',
+      mode: ModeId.modeRp,
+      name: 'Two-Step Arithmetic',
+      unlockRule: (s, l) => s.isMastered('RP_3', l),
+    ),
+    ExerciseDefinition(
+      id: 'RP_5',
+      mode: ModeId.modeRp,
+      name: 'Silent Arithmetic',
+      unlockRule: (s, l) => s.isMastered('RP_4', l),
+    ),
+    ExerciseDefinition(
+      id: 'GS_1',
+      mode: ModeId.modeGs,
+      name: 'Unison Lock',
+      unlockRule: (s, l) => s.isMastered('PF_3', l),
+    ),
+    ExerciseDefinition(
+      id: 'GS_2',
+      mode: ModeId.modeGs,
+      name: 'Chord Anchor',
+      unlockRule: (s, l) => s.isMastered('GS_1', l),
+    ),
+    ExerciseDefinition(
+      id: 'GS_3',
+      mode: ModeId.modeGs,
+      name: 'Moving Anchor',
+      unlockRule: (s, l) => s.isMastered('GS_2', l),
+    ),
+    ExerciseDefinition(
+      id: 'GS_4',
+      mode: ModeId.modeGs,
+      name: 'Distraction Layer',
+      unlockRule: (s, l) => s.isMastered('GS_3', l),
+    ),
+    ExerciseDefinition(
+      id: 'LT_1',
+      mode: ModeId.modeLt,
+      name: 'Note Identification',
+      unlockRule: (s, l) => s.isMastered('PF_1', l),
+    ),
+    ExerciseDefinition(
+      id: 'LT_2',
+      mode: ModeId.modeLt,
+      name: 'Color & Shape Match',
+      unlockRule: (s, l) => s.isMastered('LT_1', l),
+    ),
+    ExerciseDefinition(
+      id: 'LT_3',
+      mode: ModeId.modeLt,
+      name: 'Octave Discrimination',
+      unlockRule: (s, l) => s.isMastered('LT_2', l),
+    ),
   ];
 
   static ExerciseDefinition byId(String id) => all.firstWhere((e) => e.id == id);
@@ -151,9 +213,21 @@ class ExerciseCatalog {
     }
   }
 
+  static bool modeUnlocked(ProgressSnapshot snapshot, ModeId mode, LevelId level) {
+    final modeIndex = modeOrder.indexOf(mode);
+    if (modeIndex <= 0) return true;
+
+    final previousMode = modeOrder[modeIndex - 1];
+    final previousModeExercises = all.where((e) => e.mode == previousMode);
+    return previousModeExercises.every((e) => snapshot.isMastered(e.id, level));
+  }
+
   static List<ExerciseDefinition> unlocked(ProgressSnapshot snapshot, LevelId level) {
     if (!levelUnlocked(snapshot, level)) return const [];
-    return all.where((e) => e.unlockRule(snapshot, level)).toList(growable: false);
+    return all
+        .where((e) => modeUnlocked(snapshot, e.mode, level))
+        .where((e) => e.unlockRule(snapshot, level))
+        .toList(growable: false);
   }
 
   static double _masteredRatio(ProgressSnapshot snapshot, LevelId level) {
