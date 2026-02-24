@@ -25,6 +25,14 @@ class ExerciseConfig {
   final bool shapeWarpingEnabled;
   final bool colorFloodEnabled;
   final bool hapticsEnabled;
+  final String targetNote;
+  final int targetOctave;
+  final String randomizeMinNote;
+  final int randomizeMinOctave;
+  final String randomizeMaxNote;
+  final int randomizeMaxOctave;
+  final String referenceTimbre;
+  final double referenceVolume;
 
   const ExerciseConfig({
     this.toleranceCents = 20.0,
@@ -37,6 +45,14 @@ class ExerciseConfig {
     this.shapeWarpingEnabled = true,
     this.colorFloodEnabled = true,
     this.hapticsEnabled = false,
+    this.targetNote = 'A',
+    this.targetOctave = 4,
+    this.randomizeMinNote = 'G',
+    this.randomizeMinOctave = 3,
+    this.randomizeMaxNote = 'B',
+    this.randomizeMaxOctave = 4,
+    this.referenceTimbre = 'Pure Sine',
+    this.referenceVolume = 0.6,
   });
 }
 
