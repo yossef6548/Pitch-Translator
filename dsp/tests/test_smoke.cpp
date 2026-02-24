@@ -28,6 +28,12 @@ int main() {
     assert(out.nearest_midi == 69);
     assert(out.confidence > 0.2);
 
+    std::vector<float> dc_buf(cfg.hop_size, 0.1f);
+    auto dc_out = pt_dsp_process(dsp, dc_buf.data(), static_cast<int>(dc_buf.size()));
+    assert(!std::isfinite(dc_out.freq_hz));
+    assert(dc_out.nearest_midi == -1);
+    assert(dc_out.confidence == 0.0);
+
     pt_dsp_destroy(dsp);
     return 0;
 }
