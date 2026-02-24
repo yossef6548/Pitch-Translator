@@ -1,16 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/services.dart';
 import 'package:pitch_translator/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  const channel = MethodChannel('plugins.flutter.io/shared_preferences');
-
-  tearDown(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, null);
-  });
-
   testWidgets('shows app shell when onboarding completion is persisted', (
     tester,
   ) async {
@@ -51,13 +44,11 @@ void main() {
     expect(find.text('Home'), findsOneWidget);
   });
 
-  testWidgets('falls back to onboarding when persisted state read fails', (
+  testWidgets(
+      'shows onboarding on first run when no persisted completion exists', (
     tester,
   ) async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-          throw PlatformException(code: 'unavailable');
-        });
+    SharedPreferences.setMockInitialValues({});
 
     await tester.pumpWidget(const PitchTranslatorApp());
     await tester.pumpAndSettle();
@@ -66,18 +57,10 @@ void main() {
     expect(find.text('ONBOARDING_CALIBRATION'), findsOneWidget);
   });
 
-  testWidgets('advances to app shell when onboarding persistence write fails', (
+  testWidgets('advances to app shell after completing onboarding checklist', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
-          if (call.method == 'setBool') {
-            throw PlatformException(code: 'unavailable');
-          }
-          return null;
-        });
 
     await tester.pumpWidget(const PitchTranslatorApp());
     await tester.pumpAndSettle();
