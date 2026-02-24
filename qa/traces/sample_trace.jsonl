@@ -1,0 +1,2 @@
+{"timestamp_ms": 0, "freq_hz": null, "midi_float": null, "nearest_midi": null, "cents_error": null, "confidence": 0.8, "vibrato": {"detected": false, "rate_hz": null, "depth_cents": null}}
+{"timestamp_ms": 10, "freq_hz": 440.0, "midi_float": 69.0, "nearest_midi": 69, "cents_error": 0.0, "confidence": 0.9, "vibrato": {"detected": false, "rate_hz": null, "depth_cents": null}}
