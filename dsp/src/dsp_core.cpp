@@ -72,9 +72,17 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
         return out;
     }
 
+    double mean = 0.0;
+    for (int i = 0; i < n; ++i) {
+        mean += mono_samples[i];
+    }
+    mean /= static_cast<double>(n);
+
+    std::array<double, kMaxProcessSamples> centered{};
     double energy = 0.0;
     for (int i = 0; i < n; ++i) {
-        energy += mono_samples[i] * mono_samples[i];
+        centered[i] = static_cast<double>(mono_samples[i]) - mean;
+        energy += centered[i] * centered[i];
     }
     if (energy < 1e-8) {
         dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
@@ -86,7 +94,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
     for (int lag = min_lag; lag <= max_lag; ++lag) {
         double corr = 0.0;
         for (int i = 0; i < n - lag; ++i) {
-            corr += mono_samples[i] * mono_samples[i + lag];
+            corr += centered[i] * centered[i + lag];
         }
         if (corr > best_corr) {
             best_corr = corr;

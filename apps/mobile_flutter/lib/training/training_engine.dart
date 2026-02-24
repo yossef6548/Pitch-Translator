@@ -17,6 +17,15 @@ class TrainingEngine {
   LivePitchStateId _returnStateAfterOverride = LivePitchStateId.idle;
   final Queue<DspFrame> _recentFrames = Queue<DspFrame>();
 
+  void _resetSessionAccumulators() {
+    _lastTimestampMs = 0;
+    _withinToleranceMs = 0;
+    _outsideDriftMs = 0;
+    _lockedTimeMs = 0;
+    _returnStateAfterOverride = LivePitchStateId.idle;
+    _recentFrames.clear();
+  }
+
   void onDspFrame(DspFrame frame) {
     final dt = _lastTimestampMs == 0 ? 0 : max(0, frame.timestampMs - _lastTimestampMs);
     _lastTimestampMs = frame.timestampMs;
@@ -97,6 +106,7 @@ class TrainingEngine {
     switch (intent) {
       case TrainingIntent.start:
         if (state.id == LivePitchStateId.idle || state.id == LivePitchStateId.completed) {
+          _resetSessionAccumulators();
           _countdownRemainingMs = _config.countdownMs;
           state = state.copyWith(id: LivePitchStateId.countdown, errorReadoutVisible: false);
         }
@@ -117,10 +127,7 @@ class TrainingEngine {
         break;
       case TrainingIntent.restart:
         _countdownRemainingMs = _config.countdownMs;
-        _withinToleranceMs = 0;
-        _outsideDriftMs = 0;
-        _lockedTimeMs = 0;
-        _recentFrames.clear();
+        _resetSessionAccumulators();
         state = const LivePitchUiState.idle();
         break;
     }
