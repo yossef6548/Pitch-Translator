@@ -1,25 +1,66 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
+import 'dart:math';
+
 import 'package:pt_contracts/pt_contracts.dart';
 
-/// Native audio bridge placeholder:
-/// - Starts mic capture
-/// - Plays references
-/// - Streams DSP frames to Flutter
+/// Deterministic simulated audio bridge for development and QA replay.
 class NativeAudioBridge {
-  static const MethodChannel _channel = MethodChannel('pitch_translator/native_audio');
-
   Stream<DspFrame> frames() {
-    // TODO: use EventChannel to receive JSON/binary-encoded frames
-    return const Stream.empty();
+    const period = Duration(milliseconds: 50);
+    var tMs = 0;
+    return Stream.periodic(period, (_) {
+      tMs += 50;
+      final phase = tMs / 1000.0;
+
+      if (tMs < 1200) {
+        return DspFrame(
+          timestampMs: tMs,
+          freqHz: 440,
+          midiFloat: 69,
+          nearestMidi: 69,
+          centsError: 5 * sin(phase * 2),
+          confidence: 0.9,
+          vibrato: const VibratoInfo(detected: false),
+        );
+      }
+
+      if (tMs < 1600) {
+        return DspFrame(
+          timestampMs: tMs,
+          freqHz: 440,
+          midiFloat: 69,
+          nearestMidi: 69,
+          centsError: 38,
+          confidence: 0.9,
+          vibrato: const VibratoInfo(detected: false),
+        );
+      }
+
+      if (tMs < 2100) {
+        return DspFrame(
+          timestampMs: tMs,
+          freqHz: null,
+          midiFloat: null,
+          nearestMidi: null,
+          centsError: null,
+          confidence: 0.55,
+          vibrato: const VibratoInfo(detected: false),
+        );
+      }
+
+      return DspFrame(
+        timestampMs: tMs,
+        freqHz: 440,
+        midiFloat: 69,
+        nearestMidi: 69,
+        centsError: 12 * sin(phase * 3),
+        confidence: 0.85,
+        vibrato: const VibratoInfo(detected: true, rateHz: 5.5, depthCents: 18),
+      );
+    });
   }
 
-  Future<void> start() async {
-    // TODO: start native audio + DSP
-    await _channel.invokeMethod('start');
-  }
+  Future<void> start() async {}
 
-  Future<void> stop() async {
-    await _channel.invokeMethod('stop');
-  }
+  Future<void> stop() async {}
 }
