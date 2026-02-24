@@ -19,12 +19,24 @@ class ExerciseConfig {
   final double driftThresholdCents;
   final bool driftAwarenessMode;
   final int countdownMs;
+  final bool randomizeTargetWithinRange;
+  final bool referenceToneEnabled;
+  final bool showNumericOverlay;
+  final bool shapeWarpingEnabled;
+  final bool colorFloodEnabled;
+  final bool hapticsEnabled;
 
   const ExerciseConfig({
     this.toleranceCents = 20.0,
     this.driftThresholdCents = 30.0,
     this.driftAwarenessMode = false,
     this.countdownMs = 3000,
+    this.randomizeTargetWithinRange = false,
+    this.referenceToneEnabled = true,
+    this.showNumericOverlay = true,
+    this.shapeWarpingEnabled = true,
+    this.colorFloodEnabled = true,
+    this.hapticsEnabled = false,
   });
 }
 
@@ -103,7 +115,8 @@ class LivePitchUiState {
       previousStateId: previousStateId ?? this.previousStateId,
       currentMidi: currentMidi.isSet ? currentMidi.value : this.currentMidi,
       centsError: centsError.isSet ? centsError.value : this.centsError,
-      effectiveError: effectiveError.isSet ? effectiveError.value : this.effectiveError,
+      effectiveError:
+          effectiveError.isSet ? effectiveError.value : this.effectiveError,
       absError: absError ?? this.absError,
       errorFactorE: errorFactorE ?? this.errorFactorE,
       directionD: directionD ?? this.directionD,
