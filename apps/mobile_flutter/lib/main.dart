@@ -676,7 +676,15 @@ class _ExerciseConfigScreenState extends State<ExerciseConfigScreen> {
                 referenceTimbre: _referenceTimbre,
                 referenceVolume: _referenceVolume,
               );
-              Navigator.of(context).push(MaterialPageRoute(builder: (_) => LivePitchScreen(exercise: widget.exercise, config: config)));
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => LivePitchScreen(
+                    exercise: widget.exercise,
+                    config: config,
+                    level: _level,
+                  ),
+                ),
+              );
             },
             child: const Text('Start Exercise'),
           ),
@@ -804,15 +812,30 @@ class LibraryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          Text('LIBRARY', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          SizedBox(height: 12),
-          ListTile(title: Text('Reference Tones'), subtitle: Text('Pitch, timbre, duration, loop and preview controls.')),
-          ListTile(title: Text('Virtual Choir Presets'), subtitle: Text('Soprano/Alto/Tenor/Bass stacked textures.')),
-          ListTile(title: Text('Imported Audio'), subtitle: Text('Bring rehearsal stems and annotate difficult passages.')),
-        ],
+      child: FutureBuilder<Map<String, int>>(
+        future: SessionRepository.instance.libraryCounts(),
+        builder: (context, snapshot) {
+          final counts = snapshot.data ?? const <String, int>{};
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const Text('LIBRARY', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              ListTile(
+                title: const Text('Reference Tones'),
+                subtitle: Text('Active exercise tone sets: ${counts['reference_tones'] ?? 0}'),
+              ),
+              ListTile(
+                title: const Text('Mastery Archive'),
+                subtitle: Text('Mastery history entries: ${counts['mastered_entries'] ?? 0}'),
+              ),
+              ListTile(
+                title: const Text('Drift Replay Clips'),
+                subtitle: Text('Recorded drift events available: ${counts['drift_replays'] ?? 0}'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -824,28 +847,35 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          Text('SETTINGS_ROOT', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          SizedBox(height: 12),
-          ListTile(title: Text('Pitch Detection'), subtitle: Text('Sensitivity and low-confidence thresholds.')),
-          ListTile(title: Text('Feedback & Representation'), subtitle: Text('Shape/color mapping editor and preview.')),
-          ListTile(title: Text('Audio'), subtitle: Text('Input route, reference output, latency diagnostics.')),
-          ListTile(title: Text('Training'), subtitle: Text('Default tolerances, session duration and assisted mode behavior.')),
-          ListTile(title: Text('Data & Privacy'), subtitle: Text('Session export, deletion and offline retention controls.')),
-          ListTile(title: Text('About'), subtitle: Text('Version, licenses and support links.')),
-        ],
+      child: FutureBuilder<Map<String, String>>(
+        future: SessionRepository.instance.settingsSummary(),
+        builder: (context, snapshot) {
+          final summary = snapshot.data ?? const <String, String>{};
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const Text('SETTINGS_ROOT', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              ListTile(title: const Text('Pitch Detection'), subtitle: Text('Suggested profile: ${summary['detection_profile'] ?? 'Standard'}')),
+              const ListTile(title: Text('Feedback & Representation'), subtitle: Text('Shape/color mapping editor and preview.')),
+              const ListTile(title: Text('Audio'), subtitle: Text('Input route, reference output, latency diagnostics.')),
+              ListTile(title: const Text('Training'), subtitle: Text('Assisted-attempt ratio: ${summary['assist_ratio'] ?? '0%'}')),
+              ListTile(title: const Text('Data & Privacy'), subtitle: Text(summary['privacy'] ?? 'Local-only SQLite storage')),
+              const ListTile(title: Text('About'), subtitle: Text('Version, licenses and support links.')),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
 class LivePitchScreen extends StatefulWidget {
-  const LivePitchScreen({super.key, required this.exercise, required this.config});
+  const LivePitchScreen({super.key, required this.exercise, required this.config, required this.level});
 
   final ExerciseDefinition exercise;
   final ExerciseConfig config;
+  final LevelId level;
 
   @override
   State<LivePitchScreen> createState() => _LivePitchScreenState();
@@ -938,7 +968,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     final stdDev = math.sqrt(variance);
     final stability = (100 - (stdDev * 3)).clamp(0, 100).toDouble();
 
-    await SessionRepository.instance.recordSession(
+    final sessionId = await SessionRepository.instance.recordSession(
       exerciseId: widget.exercise.id,
       modeLabel: _modeTitle(widget.exercise.mode),
       startedAtMs: _sessionStartMs!,
@@ -947,6 +977,26 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
       stabilityScore: stability,
       driftCount: _driftCount,
     );
+    final success = avgError <= widget.config.toleranceCents && _driftCount <= 1;
+    await SessionRepository.instance.recordAttempt(
+      sessionId: sessionId,
+      exerciseId: widget.exercise.id,
+      levelId: widget.level.name.toUpperCase(),
+      assisted: false,
+      success: success,
+    );
+    await SessionRepository.instance.recordDriftEvents(
+      sessionId: sessionId,
+      driftCount: _driftCount,
+      confirmedAtMs: endedAtMs,
+    );
+    if (success) {
+      await SessionRepository.instance.recordMastery(
+        exerciseId: widget.exercise.id,
+        levelId: widget.level.name.toUpperCase(),
+        sourceSessionId: sessionId,
+      );
+    }
     _sessionStartMs = null;
     _absErrors.clear();
     _driftCount = 0;

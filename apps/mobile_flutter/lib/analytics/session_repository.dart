@@ -67,27 +67,69 @@ class SessionRepository {
 
     _db = await openDatabase(
       dbPath,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            exercise_id TEXT NOT NULL,
-            mode_label TEXT NOT NULL,
-            started_at_ms INTEGER NOT NULL,
-            ended_at_ms INTEGER NOT NULL,
-            avg_error_cents REAL NOT NULL,
-            stability_score REAL NOT NULL,
-            drift_count INTEGER NOT NULL
-          )
-        ''');
+      version: 2,
+      onCreate: (db, version) async => _createSchema(db),
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _createV2Tables(db);
+        }
       },
     );
 
     return _db!;
   }
 
-  Future<void> recordSession({
+  Future<void> _createSchema(Database db) async {
+    await db.execute('''
+      CREATE TABLE sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        exercise_id TEXT NOT NULL,
+        mode_label TEXT NOT NULL,
+        started_at_ms INTEGER NOT NULL,
+        ended_at_ms INTEGER NOT NULL,
+        avg_error_cents REAL NOT NULL,
+        stability_score REAL NOT NULL,
+        drift_count INTEGER NOT NULL
+      )
+    ''');
+    await _createV2Tables(db);
+  }
+
+  Future<void> _createV2Tables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        exercise_id TEXT NOT NULL,
+        level_id TEXT NOT NULL,
+        assisted INTEGER NOT NULL,
+        success INTEGER NOT NULL,
+        created_at_ms INTEGER NOT NULL,
+        FOREIGN KEY(session_id) REFERENCES sessions(id)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS drift_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        event_index INTEGER NOT NULL,
+        confirmed_at_ms INTEGER NOT NULL,
+        FOREIGN KEY(session_id) REFERENCES sessions(id)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS mastery_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        exercise_id TEXT NOT NULL,
+        level_id TEXT NOT NULL,
+        mastered_at_ms INTEGER NOT NULL,
+        source_session_id INTEGER,
+        FOREIGN KEY(source_session_id) REFERENCES sessions(id)
+      )
+    ''');
+  }
+
+  Future<int> recordSession({
     required String exerciseId,
     required String modeLabel,
     required int startedAtMs,
@@ -97,7 +139,7 @@ class SessionRepository {
     required int driftCount,
   }) async {
     final db = await _database();
-    await db.insert('sessions', {
+    return db.insert('sessions', {
       'exercise_id': exerciseId,
       'mode_label': modeLabel,
       'started_at_ms': startedAtMs,
@@ -105,6 +147,56 @@ class SessionRepository {
       'avg_error_cents': avgErrorCents,
       'stability_score': stabilityScore,
       'drift_count': driftCount,
+    });
+  }
+
+  Future<void> recordAttempt({
+    required int sessionId,
+    required String exerciseId,
+    required String levelId,
+    required bool assisted,
+    required bool success,
+  }) async {
+    final db = await _database();
+    await db.insert('attempts', {
+      'session_id': sessionId,
+      'exercise_id': exerciseId,
+      'level_id': levelId,
+      'assisted': assisted ? 1 : 0,
+      'success': success ? 1 : 0,
+      'created_at_ms': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<void> recordDriftEvents({
+    required int sessionId,
+    required int driftCount,
+    required int confirmedAtMs,
+  }) async {
+    if (driftCount <= 0) return;
+    final db = await _database();
+    final batch = db.batch();
+    for (var i = 0; i < driftCount; i++) {
+      batch.insert('drift_events', {
+        'session_id': sessionId,
+        'event_index': i,
+        'confirmed_at_ms': confirmedAtMs,
+      });
+    }
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> recordMastery({
+    required String exerciseId,
+    required String levelId,
+    required int sourceSessionId,
+  }) async {
+    final db = await _database();
+    await db.insert('mastery_history', {
+      'exercise_id': exerciseId,
+      'level_id': levelId,
+      'mastered_at_ms': DateTime.now().millisecondsSinceEpoch,
+      'source_session_id': sourceSessionId,
     });
   }
 
@@ -146,6 +238,33 @@ class SessionRepository {
       driftPerSession: ((row['drift'] as num?) ?? 0).toDouble(),
       sampleSize: sampleSize,
     );
+  }
+
+  Future<Map<String, int>> libraryCounts() async {
+    final db = await _database();
+    final tones = await db.rawQuery('SELECT COUNT(DISTINCT exercise_id) AS count FROM sessions');
+    final mastery = await db.rawQuery('SELECT COUNT(*) AS count FROM mastery_history');
+    final driftReplays = await db.rawQuery('SELECT COUNT(*) AS count FROM drift_events');
+    return {
+      'reference_tones': (tones.first['count'] as num?)?.toInt() ?? 0,
+      'mastered_entries': (mastery.first['count'] as num?)?.toInt() ?? 0,
+      'drift_replays': (driftReplays.first['count'] as num?)?.toInt() ?? 0,
+    };
+  }
+
+  Future<Map<String, String>> settingsSummary() async {
+    final db = await _database();
+    final attemptsRows = await db.rawQuery('SELECT COUNT(*) AS total, SUM(assisted) AS assisted FROM attempts');
+    final avgRows = await db.rawQuery('SELECT AVG(avg_error_cents) AS avg_error FROM sessions');
+    final row = attemptsRows.first;
+    final total = (row['total'] as num?)?.toInt() ?? 0;
+    final assisted = (row['assisted'] as num?)?.toInt() ?? 0;
+    final avgError = ((avgRows.first['avg_error'] as num?) ?? 0).toDouble();
+    return {
+      'detection_profile': avgError <= 20 ? 'Strict' : avgError <= 35 ? 'Standard' : 'Relaxed',
+      'assist_ratio': total == 0 ? '0%' : '${((assisted / total) * 100).round()}%',
+      'privacy': 'Local-only SQLite storage',
+    };
   }
 
   Future<SessionRecord?> sessionById(int id) async {

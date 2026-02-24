@@ -67,7 +67,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - **Analyze/Library/Settings expansion**
   - Added Analyze internal tabs (`Sessions`, `Trends`, `Weakness Map`)
   - Added Session detail screen scaffolding with timeline/drift marker summary surfaces
-  - Expanded Library and Settings into spec-sectioned lists rather than single placeholders
+  - Replaced static Library/Settings placeholder rows with SQLite-backed summaries derived from real session, attempt, drift, and mastery data
 
 - **Exercise config advanced controls**
   - Added target note/octave modal picker
@@ -103,9 +103,10 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Skill-decay refresh flag support for masteries older than 30 days
 
 
-- **SQLite persistence + analytics query layer (initial shipping baseline)**
-  - Added local SQLite `sessions` table and repository singleton (`SessionRepository`)
-  - Added runtime recording from `LIVE_PITCH` stop/dispose into persisted session records
+- **SQLite persistence + analytics query layer (expanded baseline)**
+  - Expanded SQLite schema to include `sessions`, `attempts`, `drift_events`, and `mastery_history` with DB v2 migration support
+  - Added runtime recording from `LIVE_PITCH` into session rows and linked attempt/drift/mastery records
+  - Added aggregate summary APIs powering data-backed Library/Settings sections
   - Added trend aggregation API (`avg_error_cents`, `stability_score`, `drift/session`)
 
 - **Deterministic QA replay harness**
@@ -146,7 +147,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Live pitch target header now reflects configured target note/octave and MIDI.
 
 **Still required**
-- Replace mock Analyze/Library/Settings data with persisted SQLite-backed data sources and charts
+- Replace remaining Analyze mock outputs (especially Weakness Map and trend chart visualization) with persisted drilldown-backed charts
 - Apply full design token system (typography scale, spacing roles, motion curves, accessibility palettes)
 - Implement complete quick-monitor passive mic preview widget on HOME_TODAY card
 
@@ -157,11 +158,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Runtime LIVE_PITCH session summaries are now persisted locally and surfaced in Home/Analyze.
 
 **Still required**
-- Expand SQLite schema and migrations beyond `sessions` table to include:
-  - attempts
-  - drift events
-  - mastery history
-- Build richer charting/aggregation views on top of persisted trend data
+- Build richer charting/aggregation views on top of persisted trend data and expose drilldowns for attempts/drift timelines in Analyze
 
 ### 4) QA replay harness expansion + CI gating
 
@@ -206,10 +203,10 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 
 ## Recommended next implementation order
 
-1. **Native audio bridge (iOS + Android)** to replace simulation.
-2. **Complete analytics persistence expansion** (attempts, drift-event timeline rows, mastery history, and migrations).
-3. **Replace remaining mock data in Library/Settings and add richer Analyze charts over persisted metrics**.
-4. **Expand QA replay scenarios to full spec coverage and enforce in CI**.
+1. **Native audio bridge (iOS + Android)** to replace simulation and validate latency budget.
+2. **Build richer Analyze visualizations** (attempt and drift timeline drilldowns plus trend charts over persisted metrics).
+3. **Expand QA replay scenarios to full spec coverage and enforce in CI**.
+4. **Apply complete design system tokenization and accessibility tuning across all screens**.
 5. **DSP hardening + performance tuning + device validation**.
 6. **Final production burn-in and release checklist across iOS/Android targets**.
 
@@ -251,6 +248,19 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Added async boot hydration/loading state to avoid flashing onboarding before persisted state is read.
   - Added guarded preference-load fallback: if preference read throws, startup now safely defaults to first-run onboarding and clears the blocking loading spinner so users can still enter the app.
   - Persists completion before transitioning to `AppShell` so first-run gating behaves correctly across relaunches.
+
+
+### Persistence + data-backed surfaces (this iteration)
+
+- `apps/mobile_flutter/lib/analytics/session_repository.dart`
+  - Upgraded local DB schema from version 1 to version 2 with forward migration support.
+  - Added durable tables for `attempts`, `drift_events`, and `mastery_history` in addition to `sessions`.
+  - Added write APIs for attempt rows, drift-event rows, and mastery history rows tied to session IDs.
+  - Added aggregate query helpers used by UI surfaces: `libraryCounts()` and `settingsSummary()`.
+- `apps/mobile_flutter/lib/main.dart`
+  - `LIVE_PITCH` persistence now records a session row and linked attempt/drift/mastery entries at stop/dispose.
+  - `LibraryScreen` now renders persisted counters (reference-tone coverage, mastery archive size, drift replay clip count).
+  - `SettingsScreen` now renders data-derived summaries (detection profile heuristic, assisted attempt ratio, privacy/storage mode).
 
 ### Validation and tooling progress
 
