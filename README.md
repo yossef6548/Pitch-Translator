@@ -56,7 +56,23 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - **LIVE_PITCH app scaffold**
   - Functional screen wiring to training engine
   - Target header, pitch line, shape/halo, cents readout, controls
+  - Target header now binds to selected note/octave configuration and computed MIDI
   - Deterministic simulated frame stream for local iteration
+
+- **Onboarding + calibration flow**
+  - Added `RootFlow` with gated `ONBOARDING_CALIBRATION` flow prior to app shell access
+  - Includes guided orientation pages and explicit mic/headphone readiness checks
+
+- **Analyze/Library/Settings expansion**
+  - Added Analyze internal tabs (`Sessions`, `Trends`, `Weakness Map`)
+  - Added Session detail screen scaffolding with timeline/drift marker summary surfaces
+  - Expanded Library and Settings into spec-sectioned lists rather than single placeholders
+
+- **Exercise config advanced controls**
+  - Added target note/octave modal picker
+  - Added randomization min/max note selectors
+  - Added reference timbre selector and reference volume slider
+  - Propagated new config fields to LIVE_PITCH session summary and target header
 
 - **C++ DSP baseline implementation**
   - Autocorrelation-based pitch estimate
@@ -116,15 +132,16 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 ### 2) Full UI completion against specs
 
 **Current state**
-- Root app navigation now exists and mode catalog launch flow is present.
-- Live pitch visuals and core states are implemented.
-- Drift replay is wired as an automatic post-drift modal for DA exercises.
+- Root app navigation, train catalog, and mode-overview flows are implemented.
+- First-run onboarding + audio calibration checklist flow is now implemented before app-shell entry.
+- Analyze/Library/Settings now include spec-aligned section structure and navigable Analyze tabs with session detail drill-in.
+- Exercise config includes advanced options: target note/octave picker modal, randomization range selectors, timbre selector, and reference volume slider.
+- Live pitch target header now reflects configured target note/octave and MIDI.
 
 **Still required**
-- Complete first-run onboarding and calibration flows
-- Expand Analyze/Library/Settings from placeholders to full product-specified feature sets
-- Implement advanced exercise-config options still missing from spec (target note/octal picker modal, timbre selector, reference volume)
+- Replace mock Analyze/Library/Settings data with persisted SQLite-backed data sources and charts
 - Apply full design token system (typography scale, spacing roles, motion curves, accessibility palettes)
+- Implement complete quick-monitor passive mic preview widget on HOME_TODAY card
 
 ### 3) Persistence and analytics
 
@@ -184,7 +201,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 ## Recommended next implementation order
 
 1. **Native audio bridge (iOS + Android)** to replace simulation.
-2. **Complete onboarding + exercise config + full Analyze/Library/Settings details**.
+2. **Replace current mock data in onboarding/analyze/library/settings with production persistence + telemetry pipelines**.
 3. **Persist progression/session analytics in SQLite and expose query layer**.
 4. **Expand QA replay scenarios to full spec coverage and enforce in CI**.
 5. **DSP hardening + performance tuning + device validation**.
@@ -223,9 +240,9 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 
 ### Validation and tooling progress
 
-- Installed Flutter SDK (`3.24.5`) in the development environment to unblock Flutter-native checks that were previously unavailable.
 - Added `apps/mobile_flutter/test/exercise_config_screen_test.dart` widget test to prevent regressions where setup selections are dropped at session start.
-- Updated color alpha call site from `withValues(alpha: ...)` to `withOpacity(...)` for Flutter 3.24 compatibility in this environment.
+- Flutter SDK commands are currently unavailable in this container path configuration; use local/CI Flutter toolchains for widget validation.
+- DSP smoke checks remain runnable in this environment.
 
 ### Training engine drift replay capture
 
@@ -270,3 +287,9 @@ UI output must be a pure function of:
 3. Training engine state machine.
 
 Do not add undocumented smoothing, hidden hysteresis, or platform-specific branching that changes visible outcomes for identical frame input.
+
+
+## Additional notes from latest pass
+
+- Environment in this container does not currently expose `flutter`/`dart` binaries on PATH, so automated Flutter formatting/tests are blocked until SDK toolchain is installed or path-exported.
+- All new UI flows are scaffolded to unblock integration work while native audio + persistence are completed.
