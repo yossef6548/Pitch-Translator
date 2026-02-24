@@ -342,9 +342,10 @@ class SessionRepository {
     final rows = await db.query(
       'sessions',
       columns: ['ended_at_ms', 'avg_error_cents', 'stability_score', 'drift_count'],
-      orderBy: 'ended_at_ms ASC',
+      orderBy: 'ended_at_ms DESC',
       limit: limit,
     );
+    // DESC+limit fetches the most recent N sessions; reverse restores chronological order for the chart.
     return rows
         .map(
           (row) => TrendPoint(
@@ -354,6 +355,8 @@ class SessionRepository {
             driftCount: (row['drift_count'] as num).toInt(),
           ),
         )
+        .toList(growable: false)
+        .reversed
         .toList(growable: false);
   }
 

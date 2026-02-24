@@ -839,7 +839,7 @@ class SessionDetailScreen extends StatelessWidget {
                       (event) => ListTile(
                         leading: const Icon(Icons.warning_amber_rounded),
                         title: Text('Drift #${event.eventIndex + 1}'),
-                        subtitle: Text('Recorded at ${DateTime.fromMillisecondsSinceEpoch(event.confirmedAtMs).toLocal()}'),
+                        subtitle: Text('Recorded at ${_formatEpochTime(event.confirmedAtMs)}'),
                         onTap: () => showDialog<void>(
                           context: context,
                           builder: (context) => AlertDialog(
@@ -923,7 +923,13 @@ class _SparklinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SparklinePainter oldDelegate) {
-    return oldDelegate.values != values || oldDelegate.color != color;
+    if (oldDelegate.color != color) return true;
+    if (identical(oldDelegate.values, values)) return false;
+    if (oldDelegate.values.length != values.length) return true;
+    for (var i = 0; i < values.length; i++) {
+      if (oldDelegate.values[i] != values[i]) return true;
+    }
+    return false;
   }
 }
 
@@ -998,12 +1004,12 @@ class _SessionTimeline extends StatelessWidget {
             Positioned(
               left: 0,
               bottom: 0,
-              child: Text(DateTime.fromMillisecondsSinceEpoch(session.startedAtMs).toLocal().toString().substring(11, 19)),
+              child: Text(_formatEpochTime(session.startedAtMs)),
             ),
             Positioned(
               right: 0,
               bottom: 0,
-              child: Text(DateTime.fromMillisecondsSinceEpoch(session.endedAtMs).toLocal().toString().substring(11, 19)),
+              child: Text(_formatEpochTime(session.endedAtMs)),
             ),
           ],
         );
@@ -1017,6 +1023,15 @@ String _formatDuration(int durationMs) {
   final mm = (seconds ~/ 60).toString().padLeft(2, '0');
   final ss = (seconds % 60).toString().padLeft(2, '0');
   return '$mm:$ss';
+}
+
+String _formatEpochTime(int epochMs) {
+  final dt = DateTime.fromMillisecondsSinceEpoch(epochMs).toLocal();
+  final hh = dt.hour.toString().padLeft(2, '0');
+  final mm = dt.minute.toString().padLeft(2, '0');
+  final ss = dt.second.toString().padLeft(2, '0');
+  return '$hh:$mm:$ss';
+}
 }
 
 class LibraryScreen extends StatelessWidget {
@@ -1143,7 +1158,9 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
           driftEvent.after.timestampMs > _lastDriftAfterTimestamp) {
         _lastDriftAfterTimestamp = driftEvent.after.timestampMs;
         _driftCount += 1;
-        _driftConfirmedAtMs.add(driftEvent.after.timestampMs);
+        // Use wall-clock epoch ms so the timestamp aligns with session.startedAtMs
+        // (DSP frame timestamps are relative starting from 0, not epoch ms).
+        _driftConfirmedAtMs.add(DateTime.now().millisecondsSinceEpoch);
       }
       if (_engine.state.id == LivePitchStateId.driftConfirmed && !_replayOpen && widget.exercise.driftAwarenessMode) {
         _openReplay();
@@ -1301,7 +1318,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
                       _activeTimeMs = 0;
                       _lockedTimeMs = 0;
                       _lastFrameTimestampMs = null;
-                      _lastDriftAfterTimestamp = _sessionStartMs!;
+                      _lastDriftAfterTimestamp = -1;
                       _driftConfirmedAtMs.clear();
                     }
                     _engine.onIntent(TrainingIntent.start);
