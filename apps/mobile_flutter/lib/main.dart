@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'analytics/session_repository.dart';
 import 'audio/native_audio_bridge.dart';
 import 'exercises/exercise_catalog.dart';
 import 'training/training_engine.dart';
@@ -282,6 +284,8 @@ class HomeTodayScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final trendsFuture = SessionRepository.instance.recentTrends();
+    final latestSessionFuture = SessionRepository.instance.latestSession();
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(16),
@@ -294,26 +298,59 @@ class HomeTodayScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Card(
-            child: ListTile(
-              title: Text('Quick Monitor'),
-              subtitle: Text('Passive monitor ready. Open Train for full controls.'),
+          Card(
+            child: StreamBuilder<DspFrame>(
+              stream: NativeAudioBridge().frames(),
+              builder: (context, snapshot) {
+                final frame = snapshot.data;
+                final cents = frame?.centsError;
+                final midi = frame?.nearestMidi;
+                return ListTile(
+                  title: const Text('Quick Monitor'),
+                  subtitle: Text(
+                    frame == null
+                        ? 'Warming up mic preview...'
+                        : 'Note: ${midi ?? '—'} • Deviation: ${cents == null ? '—' : '${cents.round()}c'}',
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),
-          const Card(
-            child: ListTile(
-              title: Text('Progress Snapshot'),
-              subtitle: Text('Avg Error: 13c • Stability: 9c • Drift/Session: 1.2'),
-              trailing: Text('→ Analyze'),
+          Card(
+            child: FutureBuilder<TrendSnapshot>(
+              future: trendsFuture,
+              builder: (context, snapshot) {
+                final trend = snapshot.data;
+                final subtitle = trend == null || trend.sampleSize == 0
+                    ? 'No completed sessions yet. Start a drill to populate analytics.'
+                    : 'Avg Error: ${trend.avgErrorCents.toStringAsFixed(1)}c • '
+                        'Stability: ${trend.stabilityScore.toStringAsFixed(1)} • '
+                        'Drift/Session: ${trend.driftPerSession.toStringAsFixed(2)}';
+                return ListTile(
+                  title: const Text('Progress Snapshot'),
+                  subtitle: Text(subtitle),
+                  trailing: const Text('→ Analyze'),
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),
-          const Card(
-            child: ListTile(
-              title: Text('Continue Last Session'),
-              subtitle: Text('Mode: Drift Awareness • Progress: 62%'),
-              trailing: Text('Resume'),
+          Card(
+            child: FutureBuilder<SessionRecord?>(
+              future: latestSessionFuture,
+              builder: (context, snapshot) {
+                final last = snapshot.data;
+                return ListTile(
+                  title: const Text('Continue Last Session'),
+                  subtitle: Text(
+                    last == null
+                        ? 'No resumable session yet.'
+                        : 'Mode: ${last.modeLabel} • Last avg error: ${last.avgErrorCents.toStringAsFixed(1)}c',
+                  ),
+                  trailing: const Text('Resume'),
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),
@@ -654,11 +691,8 @@ class AnalyzeOverviewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sessions = const [
-      ('Drift Awareness', '08:31', '12c', 2),
-      ('Pitch Freezing', '05:12', '9c', 0),
-      ('Relative Pitch', '11:05', '18c', 1),
-    ];
+    final sessionsFuture = SessionRepository.instance.recentSessions(limit: 30);
+    final trendsFuture = SessionRepository.instance.recentTrends();
     return DefaultTabController(
       length: 3,
       child: SafeArea(
@@ -668,24 +702,50 @@ class AnalyzeOverviewScreen extends StatelessWidget {
             Expanded(
               child: TabBarView(
                 children: [
-                  ListView(
-                    children: [
-                      for (final s in sessions)
-                        ListTile(
-                          title: Text('${s.$1} • ${s.$2}'),
-                          subtitle: Text('Avg Error ${s.$3} • Drift ${s.$4}'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SessionDetailScreen(mode: s.$1))),
-                        ),
-                    ],
+                  FutureBuilder<List<SessionRecord>>(
+                    future: sessionsFuture,
+                    builder: (context, snapshot) {
+                      final sessions = snapshot.data ?? const <SessionRecord>[];
+                      if (sessions.isEmpty) {
+                        return const Center(child: Text('No sessions yet. Complete a LIVE_PITCH run to populate analytics.'));
+                      }
+                      return ListView(
+                        children: [
+                          for (final s in sessions)
+                            ListTile(
+                              title: Text('${s.modeLabel} • ${_formatDuration(s.durationMs)}'),
+                              subtitle: Text('Avg Error ${s.avgErrorCents.toStringAsFixed(1)}c • Drift ${s.driftCount}'),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => SessionDetailScreen(sessionId: s.id)),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
-                  ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: const [
-                      ListTile(title: Text('Avg error trend'), subtitle: Text('13c → 11c over 7 days')),
-                      ListTile(title: Text('Stability score trend'), subtitle: Text('62 → 73')),
-                      ListTile(title: Text('Drift trend'), subtitle: Text('1.8/session → 1.1/session')),
-                    ],
+                  FutureBuilder<TrendSnapshot>(
+                    future: trendsFuture,
+                    builder: (context, snapshot) {
+                      final trend = snapshot.data;
+                      return ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          ListTile(
+                            title: const Text('Avg error trend (recent sessions)'),
+                            subtitle: Text('${trend?.avgErrorCents.toStringAsFixed(1) ?? '—'}c'),
+                          ),
+                          ListTile(
+                            title: const Text('Stability score trend (recent sessions)'),
+                            subtitle: Text(trend?.stabilityScore.toStringAsFixed(1) ?? '—'),
+                          ),
+                          ListTile(
+                            title: const Text('Drift trend (recent sessions)'),
+                            subtitle: Text(trend == null ? '—' : '${trend.driftPerSession.toStringAsFixed(2)} per session'),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   const Center(child: Text('ANALYZE_WEAKNESS_MAP\nPitch Class × Octave heatmap', textAlign: TextAlign.center)),
                 ],
@@ -699,26 +759,43 @@ class AnalyzeOverviewScreen extends StatelessWidget {
 }
 
 class SessionDetailScreen extends StatelessWidget {
-  const SessionDetailScreen({super.key, required this.mode});
+  const SessionDetailScreen({super.key, required this.sessionId});
 
-  final String mode;
+  final int sessionId;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('SESSION_DETAIL')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(mode, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const ListTile(title: Text('Cents error timeline'), subtitle: Text('Graph placeholder with drift markers.')),
-          const ListTile(title: Text('Drift markers'), subtitle: Text('Tap marker to open replay frame pair.')),
-          const ListTile(title: Text('Summary metrics'), subtitle: Text('Avg 12c • Stability 74 • Drifts 2')),
-        ],
+      body: FutureBuilder<SessionRecord?>(
+        future: SessionRepository.instance.sessionById(sessionId),
+        builder: (context, snapshot) {
+          final session = snapshot.data;
+          if (session == null) {
+            return const Center(child: Text('Session not found.'));
+          }
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(session.modeLabel, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              ListTile(title: const Text('Duration'), subtitle: Text(_formatDuration(session.durationMs))),
+              ListTile(title: const Text('Average cents error'), subtitle: Text('${session.avgErrorCents.toStringAsFixed(1)}c')),
+              ListTile(title: const Text('Stability score'), subtitle: Text(session.stabilityScore.toStringAsFixed(1))),
+              ListTile(title: const Text('Drift events'), subtitle: Text('${session.driftCount} confirmed drifts')),
+            ],
+          );
+        },
       ),
     );
   }
+}
+
+String _formatDuration(int durationMs) {
+  final seconds = durationMs ~/ 1000;
+  final mm = (seconds ~/ 60).toString().padLeft(2, '0');
+  final ss = (seconds % 60).toString().padLeft(2, '0');
+  return '$mm:$ss';
 }
 
 class LibraryScreen extends StatelessWidget {
@@ -779,6 +856,10 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
   final _bridge = NativeAudioBridge();
   StreamSubscription<DspFrame>? _sub;
   bool _replayOpen = false;
+  int? _sessionStartMs;
+  final List<double> _absErrors = <double>[];
+  int _driftCount = 0;
+  int _lastDriftAfterTimestamp = -1;
 
   @override
   void initState() {
@@ -786,6 +867,14 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     _engine = TrainingEngine(config: widget.config);
     _sub = _bridge.frames().listen((frame) {
       setState(() => _engine.onDspFrame(frame));
+      if (_engine.state.effectiveError != null) {
+        _absErrors.add(_engine.state.effectiveError!.abs());
+      }
+      final driftEvent = _engine.lastDriftEvent;
+      if (driftEvent != null && driftEvent.after.timestampMs > _lastDriftAfterTimestamp) {
+        _lastDriftAfterTimestamp = driftEvent.after.timestampMs;
+        _driftCount += 1;
+      }
       if (_engine.state.id == LivePitchStateId.driftConfirmed && !_replayOpen && widget.exercise.driftAwarenessMode) {
         _openReplay();
       }
@@ -830,8 +919,37 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     }
   }
 
+  Future<void> _persistSessionIfNeeded() async {
+    if (_sessionStartMs == null || _absErrors.isEmpty) {
+      return;
+    }
+    final endedAtMs = DateTime.now().millisecondsSinceEpoch;
+    final avgError = _absErrors.reduce((a, b) => a + b) / _absErrors.length;
+    final variance = _absErrors
+            .map((e) => (e - avgError) * (e - avgError))
+            .reduce((a, b) => a + b) /
+        _absErrors.length;
+    final stdDev = math.sqrt(variance);
+    final stability = (100 - (stdDev * 3)).clamp(0, 100).toDouble();
+
+    await SessionRepository.instance.recordSession(
+      exerciseId: widget.exercise.id,
+      modeLabel: _modeTitle(widget.exercise.mode),
+      startedAtMs: _sessionStartMs!,
+      endedAtMs: endedAtMs,
+      avgErrorCents: avgError,
+      stabilityScore: stability,
+      driftCount: _driftCount,
+    );
+    _sessionStartMs = null;
+    _absErrors.clear();
+    _driftCount = 0;
+    _lastDriftAfterTimestamp = -1;
+  }
+
   @override
   void dispose() {
+    _persistSessionIfNeeded();
     _sub?.cancel();
     super.dispose();
   }
@@ -870,10 +988,22 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
             Wrap(
               spacing: 8,
               children: [
-                ElevatedButton(onPressed: () => setState(() => _engine.onIntent(TrainingIntent.start)), child: const Text('Start')),
+                ElevatedButton(
+                  onPressed: () => setState(() {
+                    _sessionStartMs ??= DateTime.now().millisecondsSinceEpoch;
+                    _engine.onIntent(TrainingIntent.start);
+                  }),
+                  child: const Text('Start'),
+                ),
                 ElevatedButton(onPressed: () => setState(() => _engine.onIntent(TrainingIntent.pause)), child: const Text('Pause')),
                 ElevatedButton(onPressed: () => setState(() => _engine.onIntent(TrainingIntent.resume)), child: const Text('Resume')),
-                ElevatedButton(onPressed: () => setState(() => _engine.onIntent(TrainingIntent.stop)), child: const Text('Stop')),
+                ElevatedButton(
+                  onPressed: () async {
+                    setState(() => _engine.onIntent(TrainingIntent.stop));
+                    await _persistSessionIfNeeded();
+                  },
+                  child: const Text('Stop'),
+                ),
               ],
             ),
           ],
