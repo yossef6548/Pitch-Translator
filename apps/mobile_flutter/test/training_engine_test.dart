@@ -40,4 +40,22 @@ void main() {
     expect(engine.state.centsError, isNull);
     expect(engine.state.displayCents, '—');
   });
+
+  test('drift confirmation captures drift replay event snapshots', () {
+    final engine = TrainingEngine(
+      config: const ExerciseConfig(countdownMs: 0, driftAwarenessMode: true, driftThresholdCents: 30),
+    );
+    engine.onIntent(TrainingIntent.start);
+
+    engine.onDspFrame(frame(0, cents: 4));
+    engine.onDspFrame(frame(180, cents: 3));
+    engine.onDspFrame(frame(360, cents: 2));
+    engine.onDspFrame(frame(980, cents: 38));
+    engine.onDspFrame(frame(1120, cents: 39));
+    engine.onDspFrame(frame(1300, cents: 40));
+
+    expect(engine.lastDriftEvent, isNotNull);
+    expect(engine.lastDriftEvent!.beforeMidi, 69);
+    expect(engine.lastDriftEvent!.afterCents, 40);
+  });
 }
