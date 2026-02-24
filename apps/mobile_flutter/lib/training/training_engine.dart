@@ -16,6 +16,8 @@ class TrainingEngine {
   int _lockedTimeMs = 0;
   LivePitchStateId _returnStateAfterOverride = LivePitchStateId.idle;
   final Queue<DspFrame> _recentFrames = Queue<DspFrame>();
+  DriftEvent? lastDriftEvent;
+  DspFrame? _lastLockedFrame;
 
   void _resetSessionAccumulators() {
     _lastTimestampMs = 0;
@@ -70,8 +72,10 @@ class TrainingEngine {
         next = LivePitchStateId.locked;
         _lockedTimeMs = 0;
         _outsideDriftMs = 0;
+        _lastLockedFrame = frame;
       }
     } else if (prior == LivePitchStateId.locked) {
+      _lastLockedFrame = frame;
       _lockedTimeMs += dt;
       if (_lockedTimeMs >= PtConstants.lockRequiredBeforeDriftMs) {
         if (absEffectiveError > _config.driftThresholdCents) {
@@ -91,6 +95,9 @@ class TrainingEngine {
         _outsideDriftMs += dt;
         if (_outsideDriftMs >= PtConstants.driftConfirmTimeMs) {
           next = LivePitchStateId.driftConfirmed;
+          if (_lastLockedFrame != null) {
+            lastDriftEvent = DriftEvent(before: _lastLockedFrame!, after: frame);
+          }
         }
       }
     } else if (prior == LivePitchStateId.driftConfirmed && _config.driftAwarenessMode) {
@@ -231,4 +238,16 @@ class TrainingEngine {
       arrow: arrow,
     );
   }
+}
+
+class DriftEvent {
+  DriftEvent({required this.before, required this.after});
+
+  final DspFrame before;
+  final DspFrame after;
+
+  int? get beforeMidi => before.nearestMidi;
+  int? get afterMidi => after.nearestMidi;
+  double get beforeCents => before.centsError ?? 0;
+  double get afterCents => after.centsError ?? 0;
 }

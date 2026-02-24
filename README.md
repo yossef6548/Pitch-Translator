@@ -22,13 +22,25 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Live pitch state IDs and deterministic visual fields
   - Core constants synced to `specs/dsp-ui-binding.md`
 
-- **Training Engine (production-capable deterministic core)**
+- **Training Engine (deterministic core + drift replay capture)**
   - Implemented state machine:
     - `IDLE → COUNTDOWN → SEEKING_LOCK → LOCKED → DRIFT_CANDIDATE → DRIFT_CONFIRMED`
     - `ANY → LOW_CONFIDENCE` override
     - `PAUSED`, `COMPLETED`
   - Vibrato-aware effective error windowing
   - Deterministic visual math outputs (`E`, `D`, x-offset, saturation, halo)
+  - Drift replay payload capture via `DriftEvent` (`before` locked frame and `after` drift-confirm frame)
+
+- **App shell and primary UI surfaces**
+  - Implemented persistent root navigation tabs:
+    - `Home`
+    - `Train`
+    - `Analyze`
+    - `Library`
+    - `Settings`
+  - Implemented `TRAIN_CATALOG` grouping by mode with exercise launch into `LIVE_PITCH`
+  - Added initial `HOME_TODAY` cards (`FOCUS_CARD`, quick monitor placeholder, progress snapshot, continue card)
+  - Added `DRIFT_REPLAY` modal flow from live session when drift is confirmed in Drift Awareness exercises
 
 - **LIVE_PITCH app scaffold**
   - Functional screen wiring to training engine
@@ -41,9 +53,9 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Confidence estimate
   - Basic vibrato heuristic outputs
 
-- **Exercise catalog + progression core (expanded to full spec taxonomy)**
+- **Exercise catalog + progression core (full spec taxonomy)**
   - Authoritative mode IDs and level defaults encoded from `specs/exercises.md`
-  - Full exercise catalog now includes all currently defined IDs in spec:
+  - Full exercise catalog includes all currently defined IDs in spec:
     - PF: `PF_1..PF_4`
     - DA: `DA_1..DA_3`
     - RP: `RP_1..RP_5`
@@ -54,7 +66,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
     - mode-order progression (`PF → DA → RP → GS → LT`)
     - level unlock by prior-level mastery ratio (`L2=70%`, `L3=80%`)
 
-- **Adaptive progression rules (implemented from spec section 10/12)**
+- **Adaptive progression rules (spec section 10/12)**
   - Tracks per-exercise progress entries (`attempts`, `assisted_attempts`, `mastery_date`, `last_attempt_date`, `best_metrics`, failure streak)
   - Assisted mode trigger after 3 consecutive failures:
     - temporary tolerance widening `+5c`
@@ -65,85 +77,78 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - **Deterministic QA replay harness**
   - Reusable `ReplayHarness` that executes recorded `DspFrame` streams against `TrainingEngine`
   - JSONL parser for loading traces from `qa/traces`
-  - Automated QA-style tests covering null-pitch low-confidence behavior and drift-candidate recovery
+  - Automated QA-style tests covering null-pitch low-confidence behavior, drift-candidate recovery, and drift replay event capture
 
 ---
 
-## 🚧 What’s still left before true “ship to users”
-
-This section is intentionally explicit so execution can continue without reverse-engineering intent.
+## 🚧 Remaining work before production ship
 
 ### 1) Native real-time audio I/O (required for shipping)
 
-**What is missing**
-- Flutter currently uses a simulated frame source, not real microphone audio.
-- No production bridge for low-latency capture/playback and DSP feeding yet.
+**Current state**
+- Flutter currently uses a deterministic simulation source (`NativeAudioBridge.frames()`), not microphone capture.
 
-**How it must be done**
+**Still required**
 - **iOS (`native/ios`)**
-  - Implement AVAudioEngine in measurement mode.
-  - Configure play+record with low IO buffer size.
-  - Capture mono float frames at configured hop size.
-  - Feed frames to C++ DSP with zero allocations in callback.
-  - Stream DSP outputs to Flutter via EventChannel or FFI stream bridge.
+  - AVAudioEngine measurement-mode capture
+  - low-latency play/record setup
+  - callback-safe frame transfer into C++ DSP
+  - frame transport bridge into Flutter
 - **Android (`native/android`)**
-  - Implement AAudio/Oboe low-latency callback path.
-  - Same frame contract/hop-size semantics as iOS.
-  - Feed identical DSP API and emit identical frame schema.
+  - Oboe/AAudio low-latency callback path
+  - identical hop/frame semantics as iOS
+  - same DSP entrypoint and frame schema
 - **Acceptance criteria**
-  - Mic→UI end-to-end latency <= 50ms max (target <= 30ms).
-  - No dropouts/underruns in 10-minute continuous sessions.
+  - Mic→UI latency <= 50ms max (target <= 30ms)
+  - 10-minute session stability with no underruns/dropouts
 
-### 2) Full UI surface from specs (required for shipping)
+### 2) Full UI completion against specs
 
-**What is missing**
-- Only a functional LIVE_PITCH scaffold exists.
-- Missing complete screens and flows from `specs/ui-ux.md` and `specs/interaction.md`.
+**Current state**
+- Root app navigation now exists and mode catalog launch flow is present.
+- Live pitch visuals and core states are implemented.
+- Drift replay is wired as an automatic post-drift modal for DA exercises.
 
-**How it must be done**
-- Implement top-level navigation: Home / Train / Analyze / Library / Settings.
-- Implement `DRIFT_REPLAY` flow and automatic entry from `DRIFT_CONFIRMED` in Drift Awareness mode.
-- Add all mandatory IDs and edge states (mic permission, noise warning, low confidence UI treatment, paused/completed overlays).
-- Apply design-system tokens (color roles, typography, spacing, motion curves) instead of ad-hoc widget styling.
+**Still required**
+- Complete first-run onboarding and calibration flows
+- Implement detailed mode-overview and exercise-config screens
+- Fill Analyze/Library/Settings with full product-specified feature sets
+- Apply full design token system (typography scale, spacing roles, motion curves, accessibility palettes)
 
 ### 3) Persistence and analytics
 
-**What is missing**
-- Progression supports in-memory state only.
-- No local DB for sessions, frame aggregates, drift events, mastery history.
-- Analyze screens cannot be completed without this.
+**Current state**
+- Progression logic exists, but runtime data plumbing is still in-memory only.
 
-**How it must be done**
-- Add SQLite schema for:
+**Still required**
+- SQLite schema and migration system for:
   - sessions
-  - exercise attempts
+  - attempts
   - drift events
-  - per-session summary metrics
-  - mastery history entries
-- Persist deterministic aggregates (not raw audio by default).
-- Build query layer for trends, weakness map, and session detail timelines.
+  - summary metrics
+  - mastery history
+- Query layer for trend charts and per-session drill-down timelines
 
-### 4) QA replay harness expansion (required for deterministic sign-off)
+### 4) QA replay harness expansion + CI gating
 
-**Current status**
-- Deterministic replay harness and fixture parser are in place.
-- Scenario coverage currently includes low-confidence and drift recovery baselines.
+**Current state**
+- Harness + parser + baseline scenarios are implemented.
 
-**Still required before ship**
-- Expand scenario matrix to full `specs/qa.md` coverage.
-- Add strict assertions for all visual scalars (`x_offset_px`, saturation, halo, deformation).
-- Integrate replay suite into CI gate.
+**Still required**
+- Extend scenario matrix to full `specs/qa.md`
+- Add strict visual scalar assertions for every deterministic output channel
+- Wire replay suite into CI required checks
 
-### 5) DSP hardening for noisy real devices
+### 5) DSP hardening for noisy devices
 
-**What is missing**
-- Current detector is baseline-quality; not yet robust enough for shipping environments.
+**Current state**
+- Detector is baseline-quality and useful for internal integration.
 
-**How it must be done**
-- Add robust voicing and pitch tracking (e.g., YIN/MPM or equivalent hardened method).
-- Improve confidence calibration across noisy/reverberant input.
-- Strengthen vibrato detection and false-drift suppression.
-- Validate against deterministic synthetic corpus + real recorded fixtures.
+**Still required**
+- Robust voicing and advanced pitch-tracking strategy (YIN/MPM-class)
+- Confidence calibration for reverberant/noisy environments
+- Stronger false-drift suppression under expressive singing
+- Validation with synthetic corpus + real device fixture set
 
 ---
 
@@ -168,39 +173,35 @@ This section is intentionally explicit so execution can continue without reverse
 ## Recommended next implementation order
 
 1. **Native audio bridge (iOS + Android)** to replace simulation.
-2. **Complete LIVE_PITCH + DRIFT_REPLAY** using design-system tokens.
-3. **Persist progression + session analytics in SQLite and expose query layer for Analyze**.
+2. **Complete onboarding + exercise config + full Analyze/Library/Settings details**.
+3. **Persist progression/session analytics in SQLite and expose query layer**.
 4. **Expand QA replay scenarios to full spec coverage and enforce in CI**.
-5. **Analyze/Library/Settings full implementation**.
-6. **DSP hardening + performance tuning + device validation**.
+5. **DSP hardening + performance tuning + device validation**.
+6. **Final production burn-in and release checklist across iOS/Android targets**.
 
 ---
 
 ## New implementation details (this iteration)
 
-### Exercise and progression domain
+### App architecture / navigation
 
-- `apps/mobile_flutter/lib/exercises/exercise_catalog.dart`
-  - Expanded exercise registry to include full `MODE_RP`, `MODE_GS`, and `MODE_LT` lists from spec.
-  - Added mode sequencing helper to enforce mode unlock order.
-  - Updated unlock filtering to gate by both level unlock and mode unlock.
+- `apps/mobile_flutter/lib/main.dart`
+  - Replaced single-screen app entry with a root `AppShell` and persistent 5-tab navigation (`Home`, `Train`, `Analyze`, `Library`, `Settings`).
+  - Added `TRAIN_CATALOG` grouping exercises by mode and launching `LIVE_PITCH` per exercise.
+  - Added baseline `HOME_TODAY` card stack aligned with spec component IDs.
+  - Added automatic `DRIFT_REPLAY` modal after drift confirmation in drift-awareness exercises.
 
-- `apps/mobile_flutter/lib/exercises/progression_engine.dart`
-  - Added persistent in-memory progression records via `ExerciseProgress`.
-  - Added assisted training support (`AssistAdjustment`) with configurable assist trigger.
-  - Added skill decay refresh evaluation (`needsRefresh`) using 30-day window.
-  - Updated `applyResult` to:
-    - track attempts and assisted attempts
-    - preserve and update best metrics
-    - update failure streaks
-    - deny mastery credit for assisted completions
+### Training engine drift replay capture
+
+- `apps/mobile_flutter/lib/training/training_engine.dart`
+  - Added `DriftEvent` model with before/after frame snapshots for replay UI.
+  - Captures `lastDriftEvent` at drift confirmation boundary.
+  - Tracks last locked frame to anchor replay "before" state deterministically.
 
 ### Tests expanded
 
-- `apps/mobile_flutter/test/exercises/progression_engine_test.dart`
-  - Added full-catalog coverage checks and mode unlock-order tests.
-  - Added tests for assisted-attempt behavior and assist trigger after repeated failures.
-  - Added skill-decay refresh test for >30-day mastery age.
+- `apps/mobile_flutter/test/training_engine_test.dart`
+  - Added test validating drift confirmation emits replay event snapshots with expected values.
 
 ---
 
