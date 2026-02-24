@@ -253,17 +253,17 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Added `apps/mobile_flutter/test/exercise_config_screen_test.dart` widget test to prevent regressions where setup selections are dropped at session start.
 - Added `apps/mobile_flutter/test/root_flow_onboarding_test.dart` widget tests covering persisted onboarding skip and first-run completion persistence behavior.
 - Added failure-path widget coverage proving `RootFlow` exits loading state and shows onboarding when `SharedPreferences` read fails.
-- Flutter SDK commands are currently unavailable in this container path configuration; use local/CI Flutter toolchains for widget validation.
-- DSP smoke checks remain runnable in this environment.
+- Flutter SDK is now validated in-container using a locally installed toolchain (`/tmp/flutter/bin/flutter`) and full widget/unit test execution.
+- DSP smoke checks remain runnable in this environment and were re-verified in this pass.
 
 ### Environment/tooling notes for the next developer or agent
 
-- Verified in this container that Flutter is not installed on `PATH` (`flutter --version` returns `command not found`).
-- To run mobile tests locally/CI, install and expose a Flutter SDK (stable channel recommended) before running:
+- Installed Flutter stable SDK inside this container at `/tmp/flutter` and verified with `flutter --version` (3.24.0).
+- Re-ran mobile tests with the explicit binary path to avoid PATH assumptions:
   - `cd apps/mobile_flutter`
-  - `flutter pub get`
-  - `flutter test`
-- If using FVM in CI, pin a Flutter version in repo config and run tests through `fvm flutter test` to keep local and CI toolchains deterministic.
+  - `/tmp/flutter/bin/flutter pub get`
+  - `/tmp/flutter/bin/flutter test`
+- Recommendation: pin SDK via FVM (or CI cache key) and invoke through `fvm flutter test` for deterministic local/CI parity.
 
 ### Training engine drift replay capture
 
@@ -296,7 +296,7 @@ cmake --build /tmp/pt-dsp-build
 /tmp/pt-dsp-build/pt_dsp_tests
 ```
 
-> Note: In this execution environment, Flutter/Dart CLI binaries may be unavailable; DSP checks remain runnable with standard CMake toolchains.
+> Note: Flutter is available in this container via `/tmp/flutter/bin/flutter`; if PATH does not include it, call the binary explicitly as shown above.
 
 ---
 
@@ -312,5 +312,6 @@ Do not add undocumented smoothing, hidden hysteresis, or platform-specific branc
 
 ## Additional notes from latest pass
 
-- Environment in this container does not currently expose `flutter`/`dart` binaries on PATH, so automated Flutter formatting/tests are blocked until SDK toolchain is installed or path-exported.
-- All new UI flows are scaffolded to unblock integration work while native audio + persistence are completed.
+- Container PATH may still omit Flutter by default; use `/tmp/flutter/bin/flutter` (or add it to PATH) for local commands.
+- Automated Flutter test suite is now passing in this environment with the installed SDK.
+- Fixed training engine frame-timing accumulation bug (`timestampMs == 0` first-frame edge case) and drift-candidate timer reset so replay/state tests align with spec behavior.

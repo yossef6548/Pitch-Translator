@@ -4,12 +4,13 @@ import 'dart:math';
 import 'package:pt_contracts/pt_contracts.dart';
 
 class TrainingEngine {
-  TrainingEngine({ExerciseConfig? config}) : _config = config ?? const ExerciseConfig();
+  TrainingEngine({ExerciseConfig? config})
+      : _config = config ?? const ExerciseConfig();
 
   final ExerciseConfig _config;
   LivePitchUiState state = const LivePitchUiState.idle();
 
-  int _lastTimestampMs = 0;
+  int? _lastTimestampMs;
   int _countdownRemainingMs = 0;
   int _withinToleranceMs = 0;
   int _outsideDriftMs = 0;
@@ -20,7 +21,7 @@ class TrainingEngine {
   DspFrame? _lastLockedFrame;
 
   void _resetSessionAccumulators() {
-    _lastTimestampMs = 0;
+    _lastTimestampMs = null;
     _withinToleranceMs = 0;
     _outsideDriftMs = 0;
     _lockedTimeMs = 0;
@@ -29,22 +30,28 @@ class TrainingEngine {
   }
 
   void onDspFrame(DspFrame frame) {
-    final dt = _lastTimestampMs == 0 ? 0 : max(0, frame.timestampMs - _lastTimestampMs);
+    final dt = _lastTimestampMs == null
+        ? 0
+        : max(0, frame.timestampMs - _lastTimestampMs!);
     _lastTimestampMs = frame.timestampMs;
 
-    if (state.id == LivePitchStateId.paused || state.id == LivePitchStateId.completed || state.id == LivePitchStateId.idle) {
+    if (state.id == LivePitchStateId.paused ||
+        state.id == LivePitchStateId.completed ||
+        state.id == LivePitchStateId.idle) {
       return;
     }
 
     if (state.id == LivePitchStateId.lowConfidence) {
       if (!_canRecoverFromLowConfidence(frame)) {
-        state = _computeVisuals(frame, LivePitchStateId.lowConfidence, effectiveError: null);
+        state = _computeVisuals(frame, LivePitchStateId.lowConfidence,
+            effectiveError: null);
         return;
       }
       state = state.copyWith(id: _returnStateAfterOverride);
     } else if (_isLowConfidence(frame)) {
       _returnStateAfterOverride = state.id;
-      state = _computeVisuals(frame, LivePitchStateId.lowConfidence, effectiveError: null);
+      state = _computeVisuals(frame, LivePitchStateId.lowConfidence,
+          effectiveError: null);
       return;
     }
 
@@ -54,7 +61,8 @@ class TrainingEngine {
     if (state.id == LivePitchStateId.countdown) {
       _countdownRemainingMs = max(0, _countdownRemainingMs - dt);
       if (_countdownRemainingMs == 0) {
-        state = _computeVisuals(frame, LivePitchStateId.seekingLock, effectiveError: effectiveError);
+        state = _computeVisuals(frame, LivePitchStateId.seekingLock,
+            effectiveError: effectiveError);
       }
       return;
     }
@@ -85,6 +93,7 @@ class TrainingEngine {
         }
         if (_outsideDriftMs >= PtConstants.driftCandidateTimeMs) {
           next = LivePitchStateId.driftCandidate;
+          _outsideDriftMs = 0;
         }
       }
     } else if (prior == LivePitchStateId.driftCandidate) {
@@ -96,11 +105,13 @@ class TrainingEngine {
         if (_outsideDriftMs >= PtConstants.driftConfirmTimeMs) {
           next = LivePitchStateId.driftConfirmed;
           if (_lastLockedFrame != null) {
-            lastDriftEvent = DriftEvent(before: _lastLockedFrame!, after: frame);
+            lastDriftEvent =
+                DriftEvent(before: _lastLockedFrame!, after: frame);
           }
         }
       }
-    } else if (prior == LivePitchStateId.driftConfirmed && _config.driftAwarenessMode) {
+    } else if (prior == LivePitchStateId.driftConfirmed &&
+        _config.driftAwarenessMode) {
       next = LivePitchStateId.seekingLock;
       _outsideDriftMs = 0;
       _withinToleranceMs = 0;
@@ -112,14 +123,17 @@ class TrainingEngine {
   void onIntent(TrainingIntent intent) {
     switch (intent) {
       case TrainingIntent.start:
-        if (state.id == LivePitchStateId.idle || state.id == LivePitchStateId.completed) {
+        if (state.id == LivePitchStateId.idle ||
+            state.id == LivePitchStateId.completed) {
           _resetSessionAccumulators();
           _countdownRemainingMs = _config.countdownMs;
-          state = state.copyWith(id: LivePitchStateId.countdown, errorReadoutVisible: false);
+          state = state.copyWith(
+              id: LivePitchStateId.countdown, errorReadoutVisible: false);
         }
         break;
       case TrainingIntent.pause:
-        if (state.id != LivePitchStateId.idle && state.id != LivePitchStateId.paused) {
+        if (state.id != LivePitchStateId.idle &&
+            state.id != LivePitchStateId.paused) {
           _returnStateAfterOverride = state.id;
           state = state.copyWith(id: LivePitchStateId.paused);
         }
@@ -153,7 +167,8 @@ class TrainingEngine {
   double _effectiveError(DspFrame frame) {
     _recentFrames.addLast(frame);
     while (_recentFrames.isNotEmpty &&
-        frame.timestampMs - _recentFrames.first.timestampMs > PtConstants.effectiveErrorWindowMs) {
+        frame.timestampMs - _recentFrames.first.timestampMs >
+            PtConstants.effectiveErrorWindowMs) {
       _recentFrames.removeFirst();
     }
 
@@ -163,13 +178,18 @@ class TrainingEngine {
         frame.vibrato.depthCents! <= PtConstants.vibratoDepthLimitCents;
 
     if (!isValidVibrato) {
-      return frame.centsError!.clamp(-PtConstants.centsErrorClamp, PtConstants.centsErrorClamp);
+      return frame.centsError!
+          .clamp(-PtConstants.centsErrorClamp, PtConstants.centsErrorClamp);
     }
 
-    final usable = _recentFrames.where((f) => f.centsError != null).toList(growable: false);
+    final usable = _recentFrames
+        .where((f) => f.centsError != null)
+        .toList(growable: false);
     if (usable.isEmpty) return 0;
-    final mean = usable.map((f) => f.centsError!).reduce((a, b) => a + b) / usable.length;
-    return mean.clamp(-PtConstants.centsErrorClamp, PtConstants.centsErrorClamp);
+    final mean = usable.map((f) => f.centsError!).reduce((a, b) => a + b) /
+        usable.length;
+    return mean.clamp(
+        -PtConstants.centsErrorClamp, PtConstants.centsErrorClamp);
   }
 
   LivePitchUiState _computeVisuals(
@@ -196,7 +216,8 @@ class TrainingEngine {
       );
     }
 
-    final centsError = frame.centsError!.clamp(-PtConstants.centsErrorClamp, PtConstants.centsErrorClamp);
+    final centsError = frame.centsError!
+        .clamp(-PtConstants.centsErrorClamp, PtConstants.centsErrorClamp);
     final absError = effectiveError!.abs();
     final e = (absError / _config.driftThresholdCents).clamp(0.0, 1.0);
     final d = centsError == 0 ? 0 : (centsError > 0 ? 1 : -1);
@@ -204,9 +225,12 @@ class TrainingEngine {
     final deform = e * PtConstants.maxDeformPx;
 
     var saturation = 1.0 - (e * 0.6);
-    if (next == LivePitchStateId.locked) saturation = PtConstants.lockedSaturation;
-    if (next == LivePitchStateId.seekingLock) saturation = PtConstants.seekingLockSaturation;
-    if (next == LivePitchStateId.driftConfirmed) saturation = PtConstants.driftConfirmedSaturation;
+    if (next == LivePitchStateId.locked)
+      saturation = PtConstants.lockedSaturation;
+    if (next == LivePitchStateId.seekingLock)
+      saturation = PtConstants.seekingLockSaturation;
+    if (next == LivePitchStateId.driftConfirmed)
+      saturation = PtConstants.driftConfirmedSaturation;
 
     double haloIntensity;
     if (next == LivePitchStateId.locked) {
@@ -220,7 +244,8 @@ class TrainingEngine {
       haloIntensity = 0.4 + 0.3 * e;
     }
 
-    final arrow = absError <= _config.toleranceCents ? '' : (centsError > 0 ? '↑' : '↓');
+    final arrow =
+        absError <= _config.toleranceCents ? '' : (centsError > 0 ? '↑' : '↓');
     return state.copyWith(
       id: next,
       currentMidi: LivePitchUiState.setValue(frame.nearestMidi),

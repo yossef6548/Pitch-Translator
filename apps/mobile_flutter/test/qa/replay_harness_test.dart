@@ -5,7 +5,8 @@ import 'package:pitch_translator/qa/replay_harness.dart';
 import 'package:pitch_translator/training/training_engine.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
-DspFrame frame(int ts, {double? cents = 0, double confidence = 0.9}) => DspFrame(
+DspFrame frame(int ts, {double? cents = 0, double confidence = 0.9}) =>
+    DspFrame(
       timestampMs: ts,
       freqHz: cents == null ? null : 440,
       midiFloat: cents == null ? null : 69,
@@ -21,7 +22,8 @@ void main() {
     engine.onIntent(TrainingIntent.start);
 
     final harness = ReplayHarness(engine);
-    final frames = List.generate(20, (i) => frame(i * 10, cents: null, confidence: 0.8));
+    final frames =
+        List.generate(20, (i) => frame(i * 10, cents: null, confidence: 0.8));
     final result = harness.runFrames(frames);
 
     expect(result.finalState.id, LivePitchStateId.lowConfidence);
@@ -30,7 +32,8 @@ void main() {
   });
 
   test('QA-DA-01 drift candidate recovery returns to locked', () {
-    final engine = TrainingEngine(config: const ExerciseConfig(countdownMs: 0, driftAwarenessMode: true));
+    final engine = TrainingEngine(
+        config: const ExerciseConfig(countdownMs: 0, driftAwarenessMode: true));
     engine.onIntent(TrainingIntent.start);
 
     final frames = <DspFrame>[
@@ -38,8 +41,8 @@ void main() {
       frame(150, cents: 4),
       frame(320, cents: 3),
       frame(900, cents: 31),
-      frame(1020, cents: 31),
-      frame(1120, cents: 10),
+      frame(960, cents: 31),
+      frame(1030, cents: 10),
     ];
 
     final result = ReplayHarness(engine).runFrames(frames);
