@@ -27,6 +27,7 @@ class TrainingEngine {
     _lockedTimeMs = 0;
     _returnStateAfterOverride = LivePitchStateId.idle;
     _recentFrames.clear();
+    lastDriftEvent = null;
   }
 
   void onDspFrame(DspFrame frame) {

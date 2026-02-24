@@ -867,11 +867,17 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     _engine = TrainingEngine(config: widget.config);
     _sub = _bridge.frames().listen((frame) {
       setState(() => _engine.onDspFrame(frame));
-      if (_engine.state.effectiveError != null) {
+      final stateId = _engine.state.id;
+      final isTrainingActive = stateId != LivePitchStateId.idle &&
+          stateId != LivePitchStateId.paused &&
+          stateId != LivePitchStateId.completed;
+      if (isTrainingActive && _engine.state.effectiveError != null) {
         _absErrors.add(_engine.state.effectiveError!.abs());
       }
       final driftEvent = _engine.lastDriftEvent;
-      if (driftEvent != null && driftEvent.after.timestampMs > _lastDriftAfterTimestamp) {
+      if (isTrainingActive &&
+          driftEvent != null &&
+          driftEvent.after.timestampMs > _lastDriftAfterTimestamp) {
         _lastDriftAfterTimestamp = driftEvent.after.timestampMs;
         _driftCount += 1;
       }
@@ -990,7 +996,12 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
               children: [
                 ElevatedButton(
                   onPressed: () => setState(() {
-                    _sessionStartMs ??= DateTime.now().millisecondsSinceEpoch;
+                    if (_sessionStartMs == null) {
+                      _sessionStartMs = DateTime.now().millisecondsSinceEpoch;
+                      _absErrors.clear();
+                      _driftCount = 0;
+                      _lastDriftAfterTimestamp = _sessionStartMs!;
+                    }
                     _engine.onIntent(TrainingIntent.start);
                   }),
                   child: const Text('Start'),
