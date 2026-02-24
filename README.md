@@ -45,6 +45,16 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - DSP smoke test for synthetic 440Hz signal
   - Flutter unit tests for core engine transitions
 
+- **Exercise catalog + progression core (new)**
+  - Authoritative level defaults and mastery thresholds encoded from `specs/exercises.md`
+  - Unlock graph for PF/DA/RP exercise families with same-level dependency checks
+  - Progression engine that evaluates mastery (`AvgError`, `Stability`, `LockRatio`, `DriftCount`) and persists mastery snapshots in-memory
+
+- **Deterministic QA replay harness (new)**
+  - Reusable `ReplayHarness` that executes recorded `DspFrame` streams against `TrainingEngine`
+  - JSONL parser for loading traces from `qa/traces`
+  - Automated QA-style tests covering null-pitch low-confidence behavior and drift-candidate recovery
+
 ---
 
 ## 🚧 What’s still left before true “ship to users”
@@ -86,15 +96,18 @@ This section is intentionally explicit so the next developer can finish without 
 
 ### 3) Exercise catalog + progression engine
 
-**What is missing**
-- Exercise configs are not yet derived from `specs/exercises.md` catalog.
-- Unlocking/mastery/adaptive progression logic not implemented.
+**Current status**
+- Implemented for PF/DA/RP exercises in Flutter domain layer:
+  - mode and level enums
+  - level defaults (`L1/L2/L3`)
+  - mastery thresholds
+  - unlock dependency graph
+  - progression updates based on session metrics
 
-**How it must be done**
-- Model mode/level/exercise IDs exactly as defined in specs.
-- Encode tolerance + drift defaults per level (L1/L2/L3).
-- Implement mastery metric calculations and thresholds.
-- Add progression state persistence + unlock checks.
+**Still required before ship**
+- Wire catalog/progression to full Train/Home UX and persistent local storage.
+- Add adaptive recommendations and streak-based weighting.
+- Expand catalog coverage to remaining modes (`MODE_GS`, `MODE_LT`) and remaining RP exercises.
 
 ### 4) Persistence and analytics
 
@@ -113,17 +126,17 @@ This section is intentionally explicit so the next developer can finish without 
 
 ### 5) QA replay harness (required for deterministic sign-off)
 
-**What is missing**
-- `qa/` contains traces/spec docs but no complete executable assertion harness.
+**Current status**
+- Added a deterministic replay harness in Flutter:
+  - injects frame lists directly into `TrainingEngine`
+  - tracks visited state transitions
+  - parses JSONL traces for fixture-driven testing
+- Added automated scenario tests aligned to spec intent (`QA-G-01`, `QA-DA-01`).
 
-**How it must be done**
-- Build a replay runner that injects JSONL frame streams.
-- Assert:
-  - exact state transitions
-  - visual math values (`x_offset_px`, `E`, saturation, halo)
-  - scoring/progression outcomes
-- Encode scenario set from `specs/qa.md` as automated tests.
-- Gate CI on replay pass/fail.
+**Still required before ship**
+- Expand scenario matrix to full `specs/qa.md` coverage.
+- Add strict assertions for all visual scalars (`x_offset_px`, saturation, halo, deformation).
+- Integrate replay suite into CI gate.
 
 ### 6) DSP hardening for noisy real devices
 
@@ -159,11 +172,59 @@ This section is intentionally explicit so the next developer can finish without 
 ## Recommended next implementation order
 
 1. **Native audio bridge (iOS + Android)** to replace simulation.
-2. **QA replay harness** to lock deterministic behavior while iterating.
-3. **Complete LIVE_PITCH + DRIFT_REPLAY** using design-system tokens.
-4. **Exercise/progression engine + persistence**.
+2. **Complete LIVE_PITCH + DRIFT_REPLAY** using design-system tokens.
+3. **Persist progression + session analytics in SQLite and expose query layer for Analyze**.
+4. **Expand QA replay scenarios to full spec coverage and enforce in CI**.
 5. **Analyze/Library/Settings full implementation**.
 6. **DSP hardening + performance tuning + device validation**.
+
+---
+
+## New implementation details (this iteration)
+
+### Exercise and progression domain
+
+- `apps/mobile_flutter/lib/exercises/exercise_catalog.dart`
+  - Defines `ModeId`, `LevelId`, defaults, mastery thresholds, and core exercise graph.
+  - Exposes `ExerciseCatalog.unlocked(...)` and `ExerciseDefinition.configForLevel(...)`.
+- `apps/mobile_flutter/lib/exercises/progression_engine.dart`
+  - Defines `SessionMetrics`, `SessionMetricsBuilder`, and `ProgressionEngine`.
+  - Encodes spec mastery conditions and produces updated mastery snapshots.
+
+### QA replay domain
+
+- `apps/mobile_flutter/lib/qa/replay_harness.dart`
+  - Provides deterministic replay execution over `TrainingEngine`.
+  - Includes JSONL parsing helper for trace-based tests.
+
+### Tests added
+
+- `apps/mobile_flutter/test/exercises/progression_engine_test.dart`
+  - Validates level defaults, unlock chain behavior, and mastery gating.
+- `apps/mobile_flutter/test/qa/replay_harness_test.dart`
+  - Validates low-confidence null-pitch behavior and drift recovery transitions.
+  - Validates JSONL parsing on `qa/traces/sample_trace.jsonl`.
+
+---
+
+## How to run checks locally
+
+### Flutter domain tests
+
+```bash
+cd apps/mobile_flutter
+flutter test
+```
+
+### DSP smoke build/check
+
+```bash
+cmake -S dsp -B /tmp/pt-dsp-build
+cmake --build /tmp/pt-dsp-build
+/tmp/pt-dsp-build/pt_dsp_tests
+```
+
+> Note: In this execution environment, Flutter/Dart CLI binaries may be unavailable; DSP checks remain runnable with standard CMake toolchains.
 
 ---
 
