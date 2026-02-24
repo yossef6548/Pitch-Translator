@@ -38,8 +38,19 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
     - `Analyze`
     - `Library`
     - `Settings`
-  - Implemented `TRAIN_CATALOG` grouping by mode with exercise launch into `LIVE_PITCH`
+  - Implemented `TRAIN_CATALOG` grouping by mode with mode-overview entry flow
+  - Implemented `MODE_<MODE>_OVERVIEW` screens with:
+    - mode explanation
+    - training bullet summaries
+    - exercise list into `EXERCISE_CONFIG`
+  - Implemented `EXERCISE_CONFIG` with key spec sections:
+    - target randomization toggle
+    - level selection (`L1/L2/L3`) synced to defaults
+    - tolerance presets and custom slider
+    - reference + feedback toggles
+    - start action passing concrete config into `LIVE_PITCH`
   - Added initial `HOME_TODAY` cards (`FOCUS_CARD`, quick monitor placeholder, progress snapshot, continue card)
+  - Added Home Focus CTA launch into prefilled `EXERCISE_CONFIG`
   - Added `DRIFT_REPLAY` modal flow from live session when drift is confirmed in Drift Awareness exercises
 
 - **LIVE_PITCH app scaffold**
@@ -111,8 +122,8 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 
 **Still required**
 - Complete first-run onboarding and calibration flows
-- Implement detailed mode-overview and exercise-config screens
-- Fill Analyze/Library/Settings with full product-specified feature sets
+- Expand Analyze/Library/Settings from placeholders to full product-specified feature sets
+- Implement advanced exercise-config options still missing from spec (target note/octal picker modal, timbre selector, reference volume)
 - Apply full design token system (typography scale, spacing roles, motion curves, accessibility palettes)
 
 ### 3) Persistence and analytics
@@ -187,8 +198,11 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 
 - `apps/mobile_flutter/lib/main.dart`
   - Replaced single-screen app entry with a root `AppShell` and persistent 5-tab navigation (`Home`, `Train`, `Analyze`, `Library`, `Settings`).
-  - Added `TRAIN_CATALOG` grouping exercises by mode and launching `LIVE_PITCH` per exercise.
+  - Added `TRAIN_CATALOG` grouping exercises by mode and launching per-mode overviews.
+  - Added `MODE_<MODE>_OVERVIEW` and `EXERCISE_CONFIG` flows to align with interaction/ui specs.
+  - Added config handoff from `EXERCISE_CONFIG` into `LIVE_PITCH` so training runs against explicit user-selected tolerances.
   - Added baseline `HOME_TODAY` card stack aligned with spec component IDs.
+  - Added Focus-card route directly into configurable exercise setup.
   - Added automatic `DRIFT_REPLAY` modal after drift confirmation in drift-awareness exercises.
 
 ### Training engine drift replay capture
