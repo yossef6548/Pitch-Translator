@@ -140,6 +140,36 @@ void main() {
     expect(assist.durationScale, 0.8);
   });
 
+  test('assisted pass resets failure streak to avoid permanent assist', () {
+    final progression = ProgressionEngine();
+    const initial = ProgressSnapshot();
+    const fail = SessionMetrics(avgError: 50, stability: 30, lockRatio: 0.1, driftCount: 8);
+    const assistedPass = SessionMetrics(avgError: 5, stability: 2, lockRatio: 0.95, driftCount: 0);
+
+    var snapshot = initial;
+    for (var i = 0; i < 3; i++) {
+      snapshot = progression.applyResult(
+        snapshot: snapshot,
+        exerciseId: 'PF_2',
+        level: LevelId.l2,
+        metrics: fail,
+      );
+    }
+    expect(progression.assistFor('PF_2', LevelId.l2).durationScale, 0.8);
+
+    snapshot = progression.applyResult(
+      snapshot: snapshot,
+      exerciseId: 'PF_2',
+      level: LevelId.l2,
+      metrics: assistedPass,
+      assisted: true,
+    );
+
+    expect(snapshot.isMastered('PF_2', LevelId.l2), isFalse);
+    expect(progression.progressFor('PF_2', LevelId.l2).consecutiveFailures, 0);
+    expect(progression.assistFor('PF_2', LevelId.l2), AssistAdjustment.none);
+  });
+
   test('skill decay refresh needed after 30 days from mastery', () {
     final progression = ProgressionEngine();
     const initial = ProgressSnapshot();

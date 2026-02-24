@@ -146,7 +146,8 @@ class ProgressionEngine {
     final now = attemptedAt ?? DateTime.now();
     final progressKey = _key(exerciseId, level);
     final current = _exerciseState[progressKey] ?? const ExerciseProgress();
-    final mastered = isMastered(level, metrics) && !assisted;
+    final meetsMasteryMetrics = isMastered(level, metrics);
+    final mastered = meetsMasteryMetrics && !assisted;
 
     final bestMetrics = _betterMetrics(current.bestMetrics, metrics);
     _exerciseState[progressKey] = current.copyWith(
@@ -155,7 +156,7 @@ class ProgressionEngine {
       masteryDate: mastered ? now : current.masteryDate,
       lastAttemptDate: now,
       bestMetrics: bestMetrics,
-      consecutiveFailures: mastered ? 0 : current.consecutiveFailures + 1,
+      consecutiveFailures: meetsMasteryMetrics ? 0 : current.consecutiveFailures + 1,
     );
 
     if (!mastered) return snapshot;
