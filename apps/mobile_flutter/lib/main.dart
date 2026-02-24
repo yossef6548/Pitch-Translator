@@ -226,7 +226,10 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
   }
 
   Future<void> _openReplay() async {
-    setState(() => _replayOpen = true);
+    setState(() {
+      _replayOpen = true;
+      _engine.onIntent(TrainingIntent.pause);
+    });
     await showModalBottomSheet<void>(
       context: context,
       isDismissible: false,
