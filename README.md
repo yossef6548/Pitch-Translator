@@ -49,7 +49,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
     - tolerance presets and custom slider
     - reference + feedback toggles
     - start action passing concrete config into `LIVE_PITCH`
-  - Added initial `HOME_TODAY` cards (`FOCUS_CARD`, quick monitor placeholder, progress snapshot, continue card)
+  - Added initial `HOME_TODAY` cards (`FOCUS_CARD`, live quick monitor preview, progress snapshot, continue card)
   - Added Home Focus CTA launch into prefilled `EXERCISE_CONFIG`
   - Added `DRIFT_REPLAY` modal flow from live session when drift is confirmed in Drift Awareness exercises
 
@@ -102,6 +102,12 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Assisted completions are persisted but do not award mastery credit
   - Skill-decay refresh flag support for masteries older than 30 days
 
+
+- **SQLite persistence + analytics query layer (initial shipping baseline)**
+  - Added local SQLite `sessions` table and repository singleton (`SessionRepository`)
+  - Added runtime recording from `LIVE_PITCH` stop/dispose into persisted session records
+  - Added trend aggregation API (`avg_error_cents`, `stability_score`, `drift/session`)
+
 - **Deterministic QA replay harness**
   - Reusable `ReplayHarness` that executes recorded `DspFrame` streams against `TrainingEngine`
   - JSONL parser for loading traces from `qa/traces`
@@ -148,16 +154,14 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 
 **Current state**
 - Onboarding gate completion is now persisted across launches via local key-value storage.
-- Progression/session analytics logic exists, but runtime training data plumbing is still in-memory only.
+- Runtime LIVE_PITCH session summaries are now persisted locally and surfaced in Home/Analyze.
 
 **Still required**
-- SQLite schema and migration system for:
-  - sessions
+- Expand SQLite schema and migrations beyond `sessions` table to include:
   - attempts
   - drift events
-  - summary metrics
   - mastery history
-- Query layer for trend charts and per-session drill-down timelines
+- Build richer charting/aggregation views on top of persisted trend data
 
 ### 4) QA replay harness expansion + CI gating
 
@@ -203,8 +207,8 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 ## Recommended next implementation order
 
 1. **Native audio bridge (iOS + Android)** to replace simulation.
-2. **Replace current mock data in onboarding/analyze/library/settings with production persistence + telemetry pipelines**.
-3. **Persist progression/session analytics in SQLite and expose query layer**.
+2. **Complete analytics persistence expansion** (attempts, drift-event timeline rows, mastery history, and migrations).
+3. **Replace remaining mock data in Library/Settings and add richer Analyze charts over persisted metrics**.
 4. **Expand QA replay scenarios to full spec coverage and enforce in CI**.
 5. **DSP hardening + performance tuning + device validation**.
 6. **Final production burn-in and release checklist across iOS/Android targets**.
@@ -253,17 +257,8 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Added `apps/mobile_flutter/test/exercise_config_screen_test.dart` widget test to prevent regressions where setup selections are dropped at session start.
 - Added `apps/mobile_flutter/test/root_flow_onboarding_test.dart` widget tests covering persisted onboarding skip and first-run completion persistence behavior.
 - Added failure-path widget coverage proving `RootFlow` exits loading state and shows onboarding when `SharedPreferences` read fails.
-- Flutter SDK is now validated in-container using a locally installed toolchain (`/tmp/flutter/bin/flutter`) and full widget/unit test execution.
-- DSP smoke checks remain runnable in this environment and were re-verified in this pass.
-
-### Environment/tooling notes for the next developer or agent
-
-- Installed Flutter stable SDK inside this container at `/tmp/flutter` and verified with `flutter --version` (3.24.0).
-- Re-ran mobile tests with the explicit binary path to avoid PATH assumptions:
-  - `cd apps/mobile_flutter`
-  - `/tmp/flutter/bin/flutter pub get`
-  - `/tmp/flutter/bin/flutter test`
-- Recommendation: pin SDK via FVM (or CI cache key) and invoke through `fvm flutter test` for deterministic local/CI parity.
+- Flutter SDK/Dart CLI was not available in this container during this pass, so Flutter tests could not be re-run here.
+- DSP smoke build commands remain runnable in this environment and were re-verified in this pass.
 
 ### Training engine drift replay capture
 
@@ -296,7 +291,7 @@ cmake --build /tmp/pt-dsp-build
 /tmp/pt-dsp-build/pt_dsp_tests
 ```
 
-> Note: Flutter is available in this container via `/tmp/flutter/bin/flutter`; if PATH does not include it, call the binary explicitly as shown above.
+> Note: Flutter/Dart were not present in this execution environment. Run Flutter checks on a machine/CI runner with Flutter SDK installed.
 
 ---
 
@@ -310,8 +305,3 @@ UI output must be a pure function of:
 Do not add undocumented smoothing, hidden hysteresis, or platform-specific branching that changes visible outcomes for identical frame input.
 
 
-## Additional notes from latest pass
-
-- Container PATH may still omit Flutter by default; use `/tmp/flutter/bin/flutter` (or add it to PATH) for local commands.
-- Automated Flutter test suite is now passing in this environment with the installed SDK.
-- Fixed training engine frame-timing accumulation bug (`timestampMs == 0` first-frame edge case) and drift-candidate timer reset so replay/state tests align with spec behavior.
