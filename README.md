@@ -245,14 +245,25 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - `apps/mobile_flutter/lib/main.dart`
   - Added `shared_preferences`-backed onboarding completion storage (`onboarding_complete`) in `RootFlow`.
   - Added async boot hydration/loading state to avoid flashing onboarding before persisted state is read.
+  - Added guarded preference-load fallback: if preference read throws, startup now safely defaults to first-run onboarding and clears the blocking loading spinner so users can still enter the app.
   - Persists completion before transitioning to `AppShell` so first-run gating behaves correctly across relaunches.
 
 ### Validation and tooling progress
 
 - Added `apps/mobile_flutter/test/exercise_config_screen_test.dart` widget test to prevent regressions where setup selections are dropped at session start.
 - Added `apps/mobile_flutter/test/root_flow_onboarding_test.dart` widget tests covering persisted onboarding skip and first-run completion persistence behavior.
+- Added failure-path widget coverage proving `RootFlow` exits loading state and shows onboarding when `SharedPreferences` read fails.
 - Flutter SDK commands are currently unavailable in this container path configuration; use local/CI Flutter toolchains for widget validation.
 - DSP smoke checks remain runnable in this environment.
+
+### Environment/tooling notes for the next developer or agent
+
+- Verified in this container that Flutter is not installed on `PATH` (`flutter --version` returns `command not found`).
+- To run mobile tests locally/CI, install and expose a Flutter SDK (stable channel recommended) before running:
+  - `cd apps/mobile_flutter`
+  - `flutter pub get`
+  - `flutter test`
+- If using FVM in CI, pin a Flutter version in repo config and run tests through `fvm flutter test` to keep local and CI toolchains deterministic.
 
 ### Training engine drift replay capture
 

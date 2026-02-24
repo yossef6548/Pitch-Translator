@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:pitch_translator/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -41,5 +42,24 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool('onboarding_complete'), isTrue);
     expect(find.text('Home'), findsOneWidget);
+  });
+
+  testWidgets('falls back to onboarding when persisted state read fails', (
+    tester,
+  ) async {
+    const channel = MethodChannel('plugins.flutter.io/shared_preferences');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          throw PlatformException(code: 'unavailable');
+        });
+
+    await tester.pumpWidget(const PitchTranslatorApp());
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('ONBOARDING_CALIBRATION'), findsOneWidget);
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
   });
 }

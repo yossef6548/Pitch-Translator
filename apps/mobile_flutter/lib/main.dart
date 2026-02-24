@@ -48,8 +48,13 @@ class _RootFlowState extends State<RootFlow> {
   }
 
   Future<void> _loadOnboardingState() async {
-    final prefs = await SharedPreferences.getInstance();
-    final completed = prefs.getBool(_onboardingCompleteKey) ?? false;
+    var completed = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      completed = prefs.getBool(_onboardingCompleteKey) ?? false;
+    } catch (error) {
+      debugPrint('Failed to load onboarding state: $error');
+    }
     if (!mounted) {
       return;
     }
