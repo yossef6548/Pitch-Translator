@@ -74,6 +74,9 @@ class ProgressSnapshot {
 }
 
 class ExerciseCatalog {
+  static const double _l2UnlockRatio = 0.70;
+  static const double _l3UnlockRatio = 0.80;
+
   static final List<ExerciseDefinition> all = [
     ExerciseDefinition(id: 'PF_1', mode: ModeId.modePf, name: 'Single Pitch Hold (Referenced)', unlockRule: (_, __) => true),
     ExerciseDefinition(
@@ -137,7 +140,25 @@ class ExerciseCatalog {
 
   static ExerciseDefinition byId(String id) => all.firstWhere((e) => e.id == id);
 
+  static bool levelUnlocked(ProgressSnapshot snapshot, LevelId level) {
+    switch (level) {
+      case LevelId.l1:
+        return true;
+      case LevelId.l2:
+        return _masteredRatio(snapshot, LevelId.l1) >= _l2UnlockRatio;
+      case LevelId.l3:
+        return _masteredRatio(snapshot, LevelId.l2) >= _l3UnlockRatio;
+    }
+  }
+
   static List<ExerciseDefinition> unlocked(ProgressSnapshot snapshot, LevelId level) {
+    if (!levelUnlocked(snapshot, level)) return const [];
     return all.where((e) => e.unlockRule(snapshot, level)).toList(growable: false);
+  }
+
+  static double _masteredRatio(ProgressSnapshot snapshot, LevelId level) {
+    final masteredCount = all.where((exercise) => snapshot.isMastered(exercise.id, level)).length;
+    if (all.isEmpty) return 0;
+    return masteredCount / all.length;
   }
 }

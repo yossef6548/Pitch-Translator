@@ -18,12 +18,14 @@ class SessionMetrics {
 
 class SessionMetricsBuilder {
   final List<double> _effectiveErrors = [];
+  final List<double> _absEffectiveErrors = [];
   int _driftCount = 0;
   int _lockedMs = 0;
   int _activeMs = 0;
 
   void addEffectiveError(double effectiveError) {
-    _effectiveErrors.add(effectiveError.abs());
+    _effectiveErrors.add(effectiveError);
+    _absEffectiveErrors.add(effectiveError.abs());
   }
 
   void addActiveTimeMs(int deltaMs, {required bool locked}) {
@@ -38,14 +40,15 @@ class SessionMetricsBuilder {
       return const SessionMetrics(avgError: 0, stability: 0, lockRatio: 0, driftCount: 0);
     }
 
-    final mean = _effectiveErrors.reduce((a, b) => a + b) / _effectiveErrors.length;
+    final avgAbsError = _absEffectiveErrors.reduce((a, b) => a + b) / _absEffectiveErrors.length;
+    final signedMean = _effectiveErrors.reduce((a, b) => a + b) / _effectiveErrors.length;
     final variance = _effectiveErrors
-            .map((e) => (e - mean) * (e - mean))
+            .map((e) => (e - signedMean) * (e - signedMean))
             .reduce((a, b) => a + b) /
         _effectiveErrors.length;
 
     return SessionMetrics(
-      avgError: mean,
+      avgError: avgAbsError,
       stability: sqrt(variance),
       lockRatio: _activeMs == 0 ? 0 : _lockedMs / _activeMs,
       driftCount: _driftCount,
