@@ -34,10 +34,22 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
 
+  void _openFocusFromHome(BuildContext context) {
+    final focusExercise = ExerciseCatalog.byId('DA_2');
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ExerciseConfigScreen(
+          exercise: focusExercise,
+          initialLevel: LevelId.l2,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screens = [
-      HomeTodayScreen(onStartFocus: () => setState(() => _index = 1)),
+      HomeTodayScreen(onStartFocus: () => _openFocusFromHome(context), onOpenTrain: () => setState(() => _index = 1)),
       const TrainCatalogScreen(),
       const AnalyzeOverviewScreen(),
       const LibraryScreen(),
@@ -62,9 +74,10 @@ class _AppShellState extends State<AppShell> {
 }
 
 class HomeTodayScreen extends StatelessWidget {
-  const HomeTodayScreen({super.key, required this.onStartFocus});
+  const HomeTodayScreen({super.key, required this.onStartFocus, required this.onOpenTrain});
 
   final VoidCallback onStartFocus;
+  final VoidCallback onOpenTrain;
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +114,12 @@ class HomeTodayScreen extends StatelessWidget {
               trailing: Text('Resume'),
             ),
           ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onOpenTrain,
+            icon: const Icon(Icons.fitness_center),
+            label: const Text('Go to TRAIN_CATALOG'),
+          ),
         ],
       ),
     );
@@ -134,7 +153,11 @@ class TrainCatalogScreen extends StatelessWidget {
                       title: Text('${exercise.id}: ${exercise.name}'),
                       trailing: FilledButton(
                         onPressed: () {
-                          Navigator.of(context).push(MaterialPageRoute(builder: (_) => LivePitchScreen(exercise: exercise)));
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ModeOverviewScreen(mode: mode),
+                            ),
+                          );
                         },
                         child: const Text('Open'),
                       ),
@@ -160,6 +183,169 @@ class TrainCatalogScreen extends StatelessWidget {
       case ModeId.modeLt:
         return 'Listening & Translation';
     }
+  }
+}
+
+class ModeOverviewScreen extends StatelessWidget {
+  const ModeOverviewScreen({super.key, required this.mode});
+
+  final ModeId mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final exercises = ExerciseCatalog.all.where((e) => e.mode == mode).toList(growable: false);
+    return Scaffold(
+      appBar: AppBar(title: Text('MODE_${mode.name.toUpperCase()}_OVERVIEW')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(_modeTitle(mode), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(_modeDescription(mode)),
+          const SizedBox(height: 12),
+          const Text('What you train here', style: TextStyle(fontWeight: FontWeight.bold)),
+          for (final bullet in _modeBullets(mode)) ListTile(leading: const Icon(Icons.check_circle_outline), title: Text(bullet)),
+          const Divider(),
+          const Text('Exercises', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          for (final exercise in exercises)
+            Card(
+              child: ListTile(
+                title: Text('${exercise.id}: ${exercise.name}'),
+                subtitle: Text(exercise.driftAwarenessMode ? 'Drift replay enabled' : 'Standard tracking'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => ExerciseConfigScreen(exercise: exercise, initialLevel: LevelId.l2)),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class ExerciseConfigScreen extends StatefulWidget {
+  const ExerciseConfigScreen({super.key, required this.exercise, required this.initialLevel});
+
+  final ExerciseDefinition exercise;
+  final LevelId initialLevel;
+
+  @override
+  State<ExerciseConfigScreen> createState() => _ExerciseConfigScreenState();
+}
+
+class _ExerciseConfigScreenState extends State<ExerciseConfigScreen> {
+  late LevelId _level;
+  bool _randomizeTarget = false;
+  bool _referenceOn = true;
+  bool _showNumeric = true;
+  bool _shapeWarping = true;
+  bool _colorFlood = true;
+  bool _haptics = false;
+  bool _showCustomTolerance = false;
+  double _tolerance = 20;
+  double _driftThreshold = 30;
+
+  @override
+  void initState() {
+    super.initState();
+    _level = widget.initialLevel;
+    _applyLevelDefaults();
+  }
+
+  void _applyLevelDefaults() {
+    final config = widget.exercise.configForLevel(_level);
+    _tolerance = config.toleranceCents;
+    _driftThreshold = config.driftThresholdCents;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('EXERCISE_CONFIG • ${widget.exercise.id}')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text('Target', style: TextStyle(fontWeight: FontWeight.bold)),
+          SwitchListTile(
+            title: const Text('Randomize within range'),
+            value: _randomizeTarget,
+            onChanged: (value) => setState(() => _randomizeTarget = value),
+          ),
+          const SizedBox(height: 12),
+          const Text('Difficulty Level', style: TextStyle(fontWeight: FontWeight.bold)),
+          SegmentedButton<LevelId>(
+            segments: const [
+              ButtonSegment(value: LevelId.l1, label: Text('L1')),
+              ButtonSegment(value: LevelId.l2, label: Text('L2')),
+              ButtonSegment(value: LevelId.l3, label: Text('L3')),
+            ],
+            selected: {_level},
+            onSelectionChanged: (selected) {
+              setState(() {
+                _level = selected.first;
+                _applyLevelDefaults();
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          const Text('Tolerance', style: TextStyle(fontWeight: FontWeight.bold)),
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(label: const Text('Lenient ±35c'), selected: _tolerance == 35, onSelected: (_) => setState(() => _tolerance = 35)),
+              ChoiceChip(label: const Text('Standard ±20c'), selected: _tolerance == 20, onSelected: (_) => setState(() => _tolerance = 20)),
+              ChoiceChip(label: const Text('Strict ±10c'), selected: _tolerance == 10, onSelected: (_) => setState(() => _tolerance = 10)),
+            ],
+          ),
+          SwitchListTile(
+            title: const Text('Custom tolerance slider'),
+            value: _showCustomTolerance,
+            onChanged: (value) => setState(() => _showCustomTolerance = value),
+          ),
+          if (_showCustomTolerance)
+            Slider(
+              min: 5,
+              max: 40,
+              divisions: 35,
+              label: '±${_tolerance.round()}c',
+              value: _tolerance,
+              onChanged: (value) => setState(() => _tolerance = value),
+            ),
+          const SizedBox(height: 12),
+          const Text('Reference', style: TextStyle(fontWeight: FontWeight.bold)),
+          SwitchListTile(
+            title: const Text('Reference tone'),
+            value: _referenceOn,
+            onChanged: (value) => setState(() => _referenceOn = value),
+          ),
+          const SizedBox(height: 12),
+          const Text('Feedback', style: TextStyle(fontWeight: FontWeight.bold)),
+          SwitchListTile(title: const Text('Numeric overlay'), value: _showNumeric, onChanged: (value) => setState(() => _showNumeric = value)),
+          SwitchListTile(title: const Text('Shape warping'), value: _shapeWarping, onChanged: (value) => setState(() => _shapeWarping = value)),
+          SwitchListTile(title: const Text('Color flood'), value: _colorFlood, onChanged: (value) => setState(() => _colorFlood = value)),
+          SwitchListTile(title: const Text('Haptics'), value: _haptics, onChanged: (value) => setState(() => _haptics = value)),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () {
+              final config = ExerciseConfig(
+                toleranceCents: _tolerance,
+                driftThresholdCents: _driftThreshold,
+                driftAwarenessMode: widget.exercise.driftAwarenessMode,
+                countdownMs: PtConstants.defaultCountdownMs,
+              );
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => LivePitchScreen(exercise: widget.exercise, config: config)),
+              );
+            },
+            child: const Text('Start Exercise'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -199,9 +385,10 @@ class SettingsScreen extends StatelessWidget {
 }
 
 class LivePitchScreen extends StatefulWidget {
-  const LivePitchScreen({super.key, required this.exercise});
+  const LivePitchScreen({super.key, required this.exercise, required this.config});
 
   final ExerciseDefinition exercise;
+  final ExerciseConfig config;
 
   @override
   State<LivePitchScreen> createState() => _LivePitchScreenState();
@@ -216,7 +403,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
   @override
   void initState() {
     super.initState();
-    _engine = TrainingEngine(config: widget.exercise.configForLevel(LevelId.l2));
+    _engine = TrainingEngine(config: widget.config);
     _sub = _bridge.frames().listen((frame) {
       setState(() => _engine.onDspFrame(frame));
       if (_engine.state.id == LivePitchStateId.driftConfirmed && !_replayOpen && widget.exercise.driftAwarenessMode) {
@@ -307,6 +494,51 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
         ),
       ),
     );
+  }
+}
+
+String _modeTitle(ModeId mode) {
+  switch (mode) {
+    case ModeId.modePf:
+      return 'Pitch Freezing (Foundation)';
+    case ModeId.modeDa:
+      return 'Drift Awareness';
+    case ModeId.modeRp:
+      return 'Relative Pitch';
+    case ModeId.modeGs:
+      return 'Group Simulation';
+    case ModeId.modeLt:
+      return 'Listening & Translation';
+  }
+}
+
+String _modeDescription(ModeId mode) {
+  switch (mode) {
+    case ModeId.modePf:
+      return 'Build lock-in stability and reliable hold control around a single target.';
+    case ModeId.modeDa:
+      return 'Detect and recover from drift as soon as pitch instability appears.';
+    case ModeId.modeRp:
+      return 'Train interval navigation and silent correction decisions.';
+    case ModeId.modeGs:
+      return 'Hold anchors while competing tones and motion are introduced.';
+    case ModeId.modeLt:
+      return 'Map heard pitch to visual and numeric representations quickly.';
+  }
+}
+
+List<String> _modeBullets(ModeId mode) {
+  switch (mode) {
+    case ModeId.modePf:
+      return const ['Target hold consistency', 'Confidence in quiet starts', 'Basic stability metrics'];
+    case ModeId.modeDa:
+      return const ['Drift candidate awareness', 'Recovery under pressure', 'Before/after drift replay'];
+    case ModeId.modeRp:
+      return const ['Semitone jumps', 'Two-step arithmetic', 'Reference-free internal correction'];
+    case ModeId.modeGs:
+      return const ['Unison lock in context', 'Chord anchoring', 'Distraction resistance'];
+    case ModeId.modeLt:
+      return const ['Note identification', 'Color and shape matching', 'Octave discrimination'];
   }
 }
 
