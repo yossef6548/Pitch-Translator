@@ -143,11 +143,14 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Root app navigation, train catalog, and mode-overview flows are implemented.
 - First-run onboarding + audio calibration checklist flow is now implemented before app-shell entry.
 - Analyze/Library/Settings now include spec-aligned section structure and navigable Analyze tabs with session detail drill-in.
+- Analyze trends now render persisted metric sparklines (avg cents error, stability score, drift count) from SQLite-backed session history.
+- Analyze weakness map now renders a persisted pitch-class × octave heatmap (error magnitude intensity) generated from attempt-level note/octave/error captures.
+- Session detail now includes an in-session timeline strip with drift markers plus marker rows that open replay-ready previews.
 - Exercise config includes advanced options: target note/octave picker modal, randomization range selectors, timbre selector, and reference volume slider.
 - Live pitch target header now reflects configured target note/octave and MIDI.
 
 **Still required**
-- Replace remaining Analyze mock outputs (especially Weakness Map and trend chart visualization) with persisted drilldown-backed charts
+- Add native audio snippet attachment and true replay playback when tapping Session Detail drift markers
 - Apply full design token system (typography scale, spacing roles, motion curves, accessibility palettes)
 - Implement complete quick-monitor passive mic preview widget on HOME_TODAY card
 
@@ -158,7 +161,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Runtime LIVE_PITCH session summaries are now persisted locally and surfaced in Home/Analyze.
 
 **Still required**
-- Build richer charting/aggregation views on top of persisted trend data and expose drilldowns for attempts/drift timelines in Analyze
+- Extend aggregation set with per-mode/per-level percentile and longitudinal retention analytics
 
 ### 4) QA replay harness expansion + CI gating
 
@@ -204,7 +207,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 ## Recommended next implementation order
 
 1. **Native audio bridge (iOS + Android)** to replace simulation and validate latency budget.
-2. **Build richer Analyze visualizations** (attempt and drift timeline drilldowns plus trend charts over persisted metrics).
+2. **Complete Analyze replay media integration** (attach audio snippets to drift markers and enable tap-to-play replay in Session Detail).
 3. **Expand QA replay scenarios to full spec coverage and enforce in CI**.
 4. **Apply complete design system tokenization and accessibility tuning across all screens**.
 5. **DSP hardening + performance tuning + device validation**.
@@ -249,6 +252,19 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Added guarded preference-load fallback: if preference read throws, startup now safely defaults to first-run onboarding and clears the blocking loading spinner so users can still enter the app.
   - Persists completion before transitioning to `AppShell` so first-run gating behaves correctly across relaunches.
 
+
+### Analyze charts + weakness analytics (this iteration)
+
+- `apps/mobile_flutter/lib/analytics/session_repository.dart`
+  - Introduced schema migration to DB v3 with attempt-level note/octave/error capture fields.
+  - Added trend-series query API for chart rendering over recent sessions.
+  - Added weakness-map aggregation query grouped by pitch class + octave.
+  - Added drift-event query API for Session Detail marker drilldown.
+- `apps/mobile_flutter/lib/main.dart`
+  - Replaced Trends tab placeholders with rendered sparkline charts for avg error, stability, and drift count.
+  - Replaced Weakness Map placeholder with color-intensity heatmap tiles sourced from persisted attempt aggregates.
+  - Upgraded Session Detail with timeline visualization and drift marker list interactions.
+  - Updated LIVE_PITCH persistence to record attempt target note/octave/error and precise drift event timestamps.
 
 ### Persistence + data-backed surfaces (this iteration)
 

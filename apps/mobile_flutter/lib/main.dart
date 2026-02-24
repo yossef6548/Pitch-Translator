@@ -701,6 +701,8 @@ class AnalyzeOverviewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final sessionsFuture = SessionRepository.instance.recentSessions(limit: 30);
     final trendsFuture = SessionRepository.instance.recentTrends();
+    final seriesFuture = SessionRepository.instance.trendSeries(limit: 20);
+    final weaknessFuture = SessionRepository.instance.weaknessMap();
     return DefaultTabController(
       length: 3,
       child: SafeArea(
@@ -732,30 +734,55 @@ class AnalyzeOverviewScreen extends StatelessWidget {
                       );
                     },
                   ),
-                  FutureBuilder<TrendSnapshot>(
-                    future: trendsFuture,
+                  FutureBuilder<List<TrendPoint>>(
+                    future: seriesFuture,
                     builder: (context, snapshot) {
-                      final trend = snapshot.data;
-                      return ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          ListTile(
-                            title: const Text('Avg error trend (recent sessions)'),
-                            subtitle: Text('${trend?.avgErrorCents.toStringAsFixed(1) ?? '—'}c'),
-                          ),
-                          ListTile(
-                            title: const Text('Stability score trend (recent sessions)'),
-                            subtitle: Text(trend?.stabilityScore.toStringAsFixed(1) ?? '—'),
-                          ),
-                          ListTile(
-                            title: const Text('Drift trend (recent sessions)'),
-                            subtitle: Text(trend == null ? '—' : '${trend.driftPerSession.toStringAsFixed(2)} per session'),
-                          ),
-                        ],
+                      final series = snapshot.data ?? const <TrendPoint>[];
+                      return FutureBuilder<TrendSnapshot>(
+                        future: trendsFuture,
+                        builder: (context, trendSnapshot) {
+                          final trend = trendSnapshot.data;
+                          return ListView(
+                            padding: const EdgeInsets.all(16),
+                            children: [
+                              ListTile(
+                                title: const Text('Avg error trend (recent sessions)'),
+                                subtitle: Text('${trend?.avgErrorCents.toStringAsFixed(1) ?? '—'}c'),
+                              ),
+                              SizedBox(height: 96, child: _TrendSparkline(series: series, selector: (p) => p.avgErrorCents, color: Colors.orangeAccent)),
+                              const SizedBox(height: 12),
+                              ListTile(
+                                title: const Text('Stability score trend (recent sessions)'),
+                                subtitle: Text(trend?.stabilityScore.toStringAsFixed(1) ?? '—'),
+                              ),
+                              SizedBox(height: 96, child: _TrendSparkline(series: series, selector: (p) => p.stabilityScore, color: Colors.lightGreenAccent)),
+                              const SizedBox(height: 12),
+                              ListTile(
+                                title: const Text('Drift trend (recent sessions)'),
+                                subtitle: Text(trend == null ? '—' : '${trend.driftPerSession.toStringAsFixed(2)} per session'),
+                              ),
+                              SizedBox(height: 96, child: _TrendSparkline(series: series, selector: (p) => p.driftCount.toDouble(), color: Colors.cyanAccent)),
+                            ],
+                          );
+                        },
                       );
                     },
                   ),
-                  const Center(child: Text('ANALYZE_WEAKNESS_MAP\nPitch Class × Octave heatmap', textAlign: TextAlign.center)),
+                  FutureBuilder<List<WeaknessMapCell>>(
+                    future: weaknessFuture,
+                    builder: (context, snapshot) {
+                      final cells = snapshot.data ?? const <WeaknessMapCell>[];
+                      if (cells.isEmpty) {
+                        return const Center(
+                          child: Text(
+                            'ANALYZE_WEAKNESS_MAP\nComplete targeted sessions to build the pitch-class × octave heatmap.',
+                            textAlign: TextAlign.center,
+                          ),
+                        );
+                      }
+                      return _WeaknessMapGrid(cells: cells);
+                    },
+                  ),
                 ],
               ),
             ),
@@ -782,19 +809,205 @@ class SessionDetailScreen extends StatelessWidget {
           if (session == null) {
             return const Center(child: Text('Session not found.'));
           }
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(session.modeLabel, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              ListTile(title: const Text('Duration'), subtitle: Text(_formatDuration(session.durationMs))),
-              ListTile(title: const Text('Average cents error'), subtitle: Text('${session.avgErrorCents.toStringAsFixed(1)}c')),
-              ListTile(title: const Text('Stability score'), subtitle: Text(session.stabilityScore.toStringAsFixed(1))),
-              ListTile(title: const Text('Drift events'), subtitle: Text('${session.driftCount} confirmed drifts')),
-            ],
+          return FutureBuilder<List<DriftEventRecord>>(
+            future: SessionRepository.instance.driftEventsForSession(sessionId),
+            builder: (context, driftSnapshot) {
+              final driftEvents = driftSnapshot.data ?? const <DriftEventRecord>[];
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Text(session.modeLabel, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 84,
+                    child: _SessionTimeline(session: session, driftEvents: driftEvents),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(title: const Text('Duration'), subtitle: Text(_formatDuration(session.durationMs))),
+                  ListTile(title: const Text('Average cents error'), subtitle: Text('${session.avgErrorCents.toStringAsFixed(1)}c')),
+                  ListTile(title: const Text('Stability score'), subtitle: Text(session.stabilityScore.toStringAsFixed(1))),
+                  ListTile(title: const Text('Drift events'), subtitle: Text('${session.driftCount} confirmed drifts')),
+                  const Divider(),
+                  const Text('Drift markers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  if (driftEvents.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text('No drift markers recorded for this session.'),
+                    )
+                  else
+                    ...driftEvents.map(
+                      (event) => ListTile(
+                        leading: const Icon(Icons.warning_amber_rounded),
+                        title: Text('Drift #${event.eventIndex + 1}'),
+                        subtitle: Text('Recorded at ${DateTime.fromMillisecondsSinceEpoch(event.confirmedAtMs).toLocal()}'),
+                        onTap: () => showDialog<void>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Drift Replay Preview'),
+                            content: Text('Replay hook for drift marker #${event.eventIndex + 1} is ready for native audio snippet integration.'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           );
         },
       ),
+    );
+  }
+}
+
+class _TrendSparkline extends StatelessWidget {
+  const _TrendSparkline({required this.series, required this.selector, required this.color});
+
+  final List<TrendPoint> series;
+  final double Function(TrendPoint point) selector;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    if (series.length < 2) {
+      return const Center(child: Text('Need at least 2 sessions for trend chart.'));
+    }
+    return CustomPaint(
+      painter: _SparklinePainter(
+        values: series.map(selector).toList(growable: false),
+        color: color,
+      ),
+      child: const SizedBox.expand(),
+    );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  const _SparklinePainter({required this.values, required this.color});
+
+  final List<double> values;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final linePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final axisPaint = Paint()
+      ..color = Colors.white24
+      ..strokeWidth = 1;
+
+    canvas.drawLine(Offset(0, size.height - 1), Offset(size.width, size.height - 1), axisPaint);
+
+    final minV = values.reduce(math.min);
+    final maxV = values.reduce(math.max);
+    final span = (maxV - minV).abs() < 0.0001 ? 1.0 : (maxV - minV);
+    final stepX = size.width / (values.length - 1);
+
+    final path = Path();
+    for (var i = 0; i < values.length; i++) {
+      final normalized = (values[i] - minV) / span;
+      final x = i * stepX;
+      final y = size.height - (normalized * (size.height - 8)) - 4;
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(path, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SparklinePainter oldDelegate) {
+    return oldDelegate.values != values || oldDelegate.color != color;
+  }
+}
+
+class _WeaknessMapGrid extends StatelessWidget {
+  const _WeaknessMapGrid({required this.cells});
+
+  final List<WeaknessMapCell> cells;
+
+  @override
+  Widget build(BuildContext context) {
+    final maxError = cells.map((c) => c.avgErrorCents).fold<double>(0, math.max);
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        childAspectRatio: 1.5,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: cells.length,
+      itemBuilder: (context, index) {
+        final cell = cells[index];
+        final intensity = maxError <= 0 ? 0.0 : (cell.avgErrorCents / maxError).clamp(0, 1);
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: Color.lerp(Colors.green.shade700, Colors.red.shade700, intensity),
+          ),
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('${cell.note}${cell.octave}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text('${cell.avgErrorCents.toStringAsFixed(1)}c'),
+              Text('${cell.attemptCount} attempts', style: const TextStyle(fontSize: 11)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SessionTimeline extends StatelessWidget {
+  const _SessionTimeline({required this.session, required this.driftEvents});
+
+  final SessionRecord session;
+  final List<DriftEventRecord> driftEvents;
+
+  @override
+  Widget build(BuildContext context) {
+    if (session.durationMs <= 0) {
+      return const Center(child: Text('Timeline unavailable.'));
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.center,
+                child: Container(height: 6, color: Colors.white12),
+              ),
+            ),
+            for (final event in driftEvents)
+              Positioned(
+                left: ((event.confirmedAtMs - session.startedAtMs) / session.durationMs * constraints.maxWidth)
+                    .clamp(0, constraints.maxWidth - 10),
+                top: 20,
+                child: const Icon(Icons.location_on, size: 18, color: Colors.orangeAccent),
+              ),
+            Positioned(
+              left: 0,
+              bottom: 0,
+              child: Text(DateTime.fromMillisecondsSinceEpoch(session.startedAtMs).toLocal().toString().substring(11, 19)),
+            ),
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Text(DateTime.fromMillisecondsSinceEpoch(session.endedAtMs).toLocal().toString().substring(11, 19)),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -894,6 +1107,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
   int _lockedTimeMs = 0;
   int? _lastFrameTimestampMs;
   int _lastDriftAfterTimestamp = -1;
+  final List<int> _driftConfirmedAtMs = <int>[];
 
   @override
   void initState() {
@@ -929,6 +1143,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
           driftEvent.after.timestampMs > _lastDriftAfterTimestamp) {
         _lastDriftAfterTimestamp = driftEvent.after.timestampMs;
         _driftCount += 1;
+        _driftConfirmedAtMs.add(driftEvent.after.timestampMs);
       }
       if (_engine.state.id == LivePitchStateId.driftConfirmed && !_replayOpen && widget.exercise.driftAwarenessMode) {
         _openReplay();
@@ -1009,11 +1224,13 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
       levelId: widget.level.name.toUpperCase(),
       assisted: false,
       success: success,
+      targetNote: widget.config.targetNote,
+      targetOctave: widget.config.targetOctave,
+      avgErrorCents: avgError,
     );
     await SessionRepository.instance.recordDriftEvents(
       sessionId: sessionId,
-      driftCount: _driftCount,
-      confirmedAtMs: endedAtMs,
+      confirmedAtMs: List<int>.from(_driftConfirmedAtMs),
     );
     if (success) {
       await SessionRepository.instance.recordMastery(
@@ -1030,6 +1247,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     _lockedTimeMs = 0;
     _lastFrameTimestampMs = null;
     _lastDriftAfterTimestamp = -1;
+    _driftConfirmedAtMs.clear();
   }
 
   @override
@@ -1084,6 +1302,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
                       _lockedTimeMs = 0;
                       _lastFrameTimestampMs = null;
                       _lastDriftAfterTimestamp = _sessionStartMs!;
+                      _driftConfirmedAtMs.clear();
                     }
                     _engine.onIntent(TrainingIntent.start);
                   }),

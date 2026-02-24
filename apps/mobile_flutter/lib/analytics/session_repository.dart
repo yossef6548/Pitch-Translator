@@ -52,6 +52,46 @@ class TrendSnapshot {
   final int sampleSize;
 }
 
+class TrendPoint {
+  const TrendPoint({
+    required this.endedAtMs,
+    required this.avgErrorCents,
+    required this.stabilityScore,
+    required this.driftCount,
+  });
+
+  final int endedAtMs;
+  final double avgErrorCents;
+  final double stabilityScore;
+  final int driftCount;
+}
+
+class WeaknessMapCell {
+  const WeaknessMapCell({
+    required this.note,
+    required this.octave,
+    required this.avgErrorCents,
+    required this.attemptCount,
+  });
+
+  final String note;
+  final int octave;
+  final double avgErrorCents;
+  final int attemptCount;
+}
+
+class DriftEventRecord {
+  const DriftEventRecord({
+    required this.id,
+    required this.eventIndex,
+    required this.confirmedAtMs,
+  });
+
+  final int id;
+  final int eventIndex;
+  final int confirmedAtMs;
+}
+
 class SessionRepository {
   SessionRepository._();
 
@@ -67,11 +107,14 @@ class SessionRepository {
 
     _db = await openDatabase(
       dbPath,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async => _createSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _createV2Tables(db);
+        }
+        if (oldVersion < 3) {
+          await _migrateToV3(db);
         }
       },
     );
@@ -93,6 +136,7 @@ class SessionRepository {
       )
     ''');
     await _createV2Tables(db);
+    await _migrateToV3(db);
   }
 
   Future<void> _createV2Tables(Database db) async {
@@ -129,6 +173,21 @@ class SessionRepository {
     ''');
   }
 
+  Future<void> _migrateToV3(Database db) async {
+    final attemptsColumns = await db.rawQuery('PRAGMA table_info(attempts)');
+    final existingColumns = attemptsColumns.map((row) => row['name']).toSet();
+
+    if (!existingColumns.contains('target_note')) {
+      await db.execute('ALTER TABLE attempts ADD COLUMN target_note TEXT');
+    }
+    if (!existingColumns.contains('target_octave')) {
+      await db.execute('ALTER TABLE attempts ADD COLUMN target_octave INTEGER');
+    }
+    if (!existingColumns.contains('avg_error_cents')) {
+      await db.execute('ALTER TABLE attempts ADD COLUMN avg_error_cents REAL');
+    }
+  }
+
   Future<int> recordSession({
     required String exerciseId,
     required String modeLabel,
@@ -156,6 +215,9 @@ class SessionRepository {
     required String levelId,
     required bool assisted,
     required bool success,
+    String? targetNote,
+    int? targetOctave,
+    double? avgErrorCents,
   }) async {
     final db = await _database();
     await db.insert('attempts', {
@@ -164,23 +226,25 @@ class SessionRepository {
       'level_id': levelId,
       'assisted': assisted ? 1 : 0,
       'success': success ? 1 : 0,
+      'target_note': targetNote,
+      'target_octave': targetOctave,
+      'avg_error_cents': avgErrorCents,
       'created_at_ms': DateTime.now().millisecondsSinceEpoch,
     });
   }
 
   Future<void> recordDriftEvents({
     required int sessionId,
-    required int driftCount,
-    required int confirmedAtMs,
+    required List<int> confirmedAtMs,
   }) async {
-    if (driftCount <= 0) return;
+    if (confirmedAtMs.isEmpty) return;
     final db = await _database();
     final batch = db.batch();
-    for (var i = 0; i < driftCount; i++) {
+    for (var i = 0; i < confirmedAtMs.length; i++) {
       batch.insert('drift_events', {
         'session_id': sessionId,
         'event_index': i,
-        'confirmed_at_ms': confirmedAtMs,
+        'confirmed_at_ms': confirmedAtMs[i],
       });
     }
     await batch.commit(noResult: true);
@@ -271,5 +335,71 @@ class SessionRepository {
     final db = await _database();
     final rows = await db.query('sessions', where: 'id = ?', whereArgs: [id], limit: 1);
     return rows.isEmpty ? null : SessionRecord.fromMap(rows.first);
+  }
+
+  Future<List<TrendPoint>> trendSeries({int limit = 20}) async {
+    final db = await _database();
+    final rows = await db.query(
+      'sessions',
+      columns: ['ended_at_ms', 'avg_error_cents', 'stability_score', 'drift_count'],
+      orderBy: 'ended_at_ms ASC',
+      limit: limit,
+    );
+    return rows
+        .map(
+          (row) => TrendPoint(
+            endedAtMs: row['ended_at_ms'] as int,
+            avgErrorCents: (row['avg_error_cents'] as num).toDouble(),
+            stabilityScore: (row['stability_score'] as num).toDouble(),
+            driftCount: (row['drift_count'] as num).toInt(),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<WeaknessMapCell>> weaknessMap() async {
+    final db = await _database();
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        target_note,
+        target_octave,
+        AVG(avg_error_cents) AS avg_error,
+        COUNT(*) AS attempts
+      FROM attempts
+      WHERE target_note IS NOT NULL AND target_octave IS NOT NULL AND avg_error_cents IS NOT NULL
+      GROUP BY target_note, target_octave
+      ORDER BY target_octave ASC, target_note ASC
+      ''',
+    );
+    return rows
+        .map(
+          (row) => WeaknessMapCell(
+            note: row['target_note'] as String,
+            octave: (row['target_octave'] as num).toInt(),
+            avgErrorCents: (row['avg_error'] as num).toDouble(),
+            attemptCount: (row['attempts'] as num).toInt(),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<DriftEventRecord>> driftEventsForSession(int sessionId) async {
+    final db = await _database();
+    final rows = await db.query(
+      'drift_events',
+      where: 'session_id = ?',
+      whereArgs: [sessionId],
+      orderBy: 'event_index ASC',
+    );
+    return rows
+        .map(
+          (row) => DriftEventRecord(
+            id: row['id'] as int,
+            eventIndex: (row['event_index'] as num).toInt(),
+            confirmedAtMs: (row['confirmed_at_ms'] as num).toInt(),
+          ),
+        )
+        .toList(growable: false);
   }
 }
