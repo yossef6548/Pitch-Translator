@@ -62,6 +62,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - **Onboarding + calibration flow**
   - Added `RootFlow` with gated `ONBOARDING_CALIBRATION` flow prior to app shell access
   - Includes guided orientation pages and explicit mic/headphone readiness checks
+  - Persisted onboarding completion with `shared_preferences` so first-run gating is not shown again after relaunch
 
 - **Analyze/Library/Settings expansion**
   - Added Analyze internal tabs (`Sessions`, `Trends`, `Weakness Map`)
@@ -146,7 +147,8 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 ### 3) Persistence and analytics
 
 **Current state**
-- Progression logic exists, but runtime data plumbing is still in-memory only.
+- Onboarding gate completion is now persisted across launches via local key-value storage.
+- Progression/session analytics logic exists, but runtime training data plumbing is still in-memory only.
 
 **Still required**
 - SQLite schema and migration system for:
@@ -238,9 +240,17 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Wired `showNumericOverlay` to `LIVE_PITCH` cents readout visibility to ensure session behavior reflects user selection.
   - Added a compact session-options status row in `LIVE_PITCH` for deterministic verification of the active run configuration.
 
+### Onboarding persistence hardening
+
+- `apps/mobile_flutter/lib/main.dart`
+  - Added `shared_preferences`-backed onboarding completion storage (`onboarding_complete`) in `RootFlow`.
+  - Added async boot hydration/loading state to avoid flashing onboarding before persisted state is read.
+  - Persists completion before transitioning to `AppShell` so first-run gating behaves correctly across relaunches.
+
 ### Validation and tooling progress
 
 - Added `apps/mobile_flutter/test/exercise_config_screen_test.dart` widget test to prevent regressions where setup selections are dropped at session start.
+- Added `apps/mobile_flutter/test/root_flow_onboarding_test.dart` widget tests covering persisted onboarding skip and first-run completion persistence behavior.
 - Flutter SDK commands are currently unavailable in this container path configuration; use local/CI Flutter toolchains for widget validation.
 - DSP smoke checks remain runnable in this environment.
 

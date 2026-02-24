@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:pt_contracts/pt_contracts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'audio/native_audio_bridge.dart';
 import 'exercises/exercise_catalog.dart';
@@ -35,15 +36,49 @@ class RootFlow extends StatefulWidget {
 }
 
 class _RootFlowState extends State<RootFlow> {
+  static const _onboardingCompleteKey = 'onboarding_complete';
+
   bool _completedOnboarding = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOnboardingState();
+  }
+
+  Future<void> _loadOnboardingState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final completed = prefs.getBool(_onboardingCompleteKey) ?? false;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _completedOnboarding = completed;
+      _loading = false;
+    });
+  }
+
+  Future<void> _completeOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onboardingCompleteKey, true);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _completedOnboarding = true);
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     if (_completedOnboarding) {
       return const AppShell();
     }
     return OnboardingCalibrationScreen(
-      onComplete: () => setState(() => _completedOnboarding = true),
+      onComplete: _completeOnboarding,
     );
   }
 }
