@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:pt_contracts/pt_contracts.dart';
 
 DspFrame dspFrame(
@@ -7,14 +9,18 @@ DspFrame dspFrame(
   bool vibratoDetected = false,
   double? vibratoRateHz,
   double? vibratoDepthCents,
-  int? nearestMidi,
+  int nearestMidi = 69,
 }) {
   final hasPitch = cents != null;
+  final double? midiFloat = hasPitch ? nearestMidi + cents / 100.0 : null;
+  final double? freqHz = midiFloat != null
+      ? 440.0 * math.pow(2.0, (midiFloat - 69.0) / 12.0)
+      : null;
   return DspFrame(
     timestampMs: timestampMs,
-    freqHz: hasPitch ? 440 : null,
-    midiFloat: hasPitch ? 69 : null,
-    nearestMidi: hasPitch ? (nearestMidi ?? 69) : null,
+    freqHz: freqHz,
+    midiFloat: midiFloat,
+    nearestMidi: hasPitch ? nearestMidi : null,
     centsError: cents,
     confidence: confidence,
     vibrato: VibratoInfo(
