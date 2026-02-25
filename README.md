@@ -103,6 +103,11 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Skill-decay refresh flag support for masteries older than 30 days
 
 
+- **Advanced analytics: percentile + retention insights**
+  - Added per-mode/per-level absolute error percentile distributions (`P50`, `P90`) computed from persisted attempt history
+  - Added longitudinal retention metrics from mastery→follow-up success windows (`7-day`, `30-day`)
+  - Surfaced these metrics in Analyze → Trends and Settings summaries for progression-quality visibility
+
 - **SQLite persistence + analytics query layer (expanded baseline)**
   - Expanded SQLite schema to include `sessions`, `attempts`, `drift_events`, and `mastery_history` with DB v2 migration support
   - Added runtime recording from `LIVE_PITCH` into session rows and linked attempt/drift/mastery records
@@ -162,7 +167,8 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Runtime LIVE_PITCH session summaries are now persisted locally and surfaced in Home/Analyze.
 
 **Still required**
-- Extend aggregation set with per-mode/per-level percentile and longitudinal retention analytics
+- Add export-ready analytics bundles for coach/report sharing flows
+- Add cloud-sync analytics mirror behind feature flags
 
 ### 4) QA replay harness expansion + CI gating
 
@@ -217,6 +223,16 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 ---
 
 ## New implementation details (this iteration)
+
+### Advanced analytics completion (this iteration)
+
+- `apps/mobile_flutter/lib/analytics/session_repository.dart`
+  - Added `ModeLevelPercentile` model and `modeLevelPercentiles()` aggregation to compute `P50`/`P90` absolute cents error by mode + level from persisted attempts.
+  - Added `RetentionSnapshot` model and `retentionSnapshot()` aggregation to compute mastery retention in 7-day and 30-day follow-up windows using successful unassisted attempts after mastery.
+  - Extended `settingsSummary()` with analytics-derived keys: 30-day retention and mode/level percentile coverage.
+- `apps/mobile_flutter/lib/main.dart`
+  - Analyze → Trends now renders a longitudinal retention row and a mode/level percentile panel (`P50`, `P90`, sample counts).
+  - Settings → Training now includes 30-day retention, and Settings → Data & Privacy now displays analytics coverage to verify persistence depth.
 
 ### App architecture / navigation
 

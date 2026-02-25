@@ -80,6 +80,38 @@ class WeaknessMapCell {
   final int attemptCount;
 }
 
+class ModeLevelPercentile {
+  const ModeLevelPercentile({
+    required this.mode,
+    required this.level,
+    required this.sampleSize,
+    required this.p50ErrorCents,
+    required this.p90ErrorCents,
+  });
+
+  final String mode;
+  final String level;
+  final int sampleSize;
+  final double p50ErrorCents;
+  final double p90ErrorCents;
+}
+
+class RetentionSnapshot {
+  const RetentionSnapshot({
+    required this.masteredCount,
+    required this.retained7DayCount,
+    required this.retained30DayCount,
+  });
+
+  final int masteredCount;
+  final int retained7DayCount;
+  final int retained30DayCount;
+
+  double get retained7DayRatio => masteredCount == 0 ? 0 : retained7DayCount / masteredCount;
+
+  double get retained30DayRatio => masteredCount == 0 ? 0 : retained30DayCount / masteredCount;
+}
+
 class DriftEventRecord {
   const DriftEventRecord({
     required this.id,
@@ -145,7 +177,7 @@ class SessionRepository {
 
     _db = await openDatabase(
       dbPath,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async => _createSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -156,6 +188,9 @@ class SessionRepository {
         }
         if (oldVersion < 4) {
           await _migrateToV4(db);
+        }
+        if (oldVersion < 5) {
+          await _migrateToV5(db);
         }
       },
     );
@@ -179,6 +214,7 @@ class SessionRepository {
     await _createV2Tables(db);
     await _migrateToV3(db);
     await _migrateToV4(db);
+    await _migrateToV5(db);
   }
 
   Future<void> _createV2Tables(Database db) async {
@@ -255,6 +291,15 @@ class SessionRepository {
     if (!existingColumns.contains('audio_snippet_uri')) {
       await db.execute('ALTER TABLE drift_events ADD COLUMN audio_snippet_uri TEXT');
     }
+  }
+
+  Future<void> _migrateToV5(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_attempts_lookup ON attempts(exercise_id, level_id, created_at_ms, success, assisted)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_mastery_lookup ON mastery_history(exercise_id, level_id, mastered_at_ms)',
+    );
   }
 
   Future<int> recordSession({
@@ -394,8 +439,16 @@ class SessionRepository {
 
   Future<Map<String, String>> settingsSummary() async {
     final db = await _database();
-    final attemptsRows = await db.rawQuery('SELECT COUNT(*) AS total, SUM(assisted) AS assisted FROM attempts');
-    final avgRows = await db.rawQuery('SELECT AVG(avg_error_cents) AS avg_error FROM sessions');
+    // Start all independent async operations concurrently to reduce overall latency.
+    final attemptsFuture = db.rawQuery('SELECT COUNT(*) AS total, SUM(assisted) AS assisted FROM attempts');
+    final avgFuture = db.rawQuery('SELECT AVG(avg_error_cents) AS avg_error FROM sessions');
+    final retentionFuture = retentionSnapshot();
+    final percentilesFuture = modeLevelPercentiles();
+
+    final attemptsRows = await attemptsFuture;
+    final avgRows = await avgFuture;
+    final retention = await retentionFuture;
+    final percentiles = await percentilesFuture;
     final row = attemptsRows.first;
     final total = (row['total'] as num?)?.toInt() ?? 0;
     final assisted = (row['assisted'] as num?)?.toInt() ?? 0;
@@ -403,8 +456,149 @@ class SessionRepository {
     return {
       'detection_profile': avgError <= 20 ? 'Strict' : avgError <= 35 ? 'Standard' : 'Relaxed',
       'assist_ratio': total == 0 ? '0%' : '${((assisted / total) * 100).round()}%',
+      'retention_30d': retention.masteredCount == 0 ? '0%' : '${(retention.retained30DayRatio * 100).round()}%',
+      'percentile_coverage': '${percentiles.length} mode/level groups',
       'privacy': 'Local-only SQLite storage',
     };
+  }
+
+  Future<List<ModeLevelPercentile>> modeLevelPercentiles() async {
+    final db = await _database();
+
+    // First, get the distinct (exercise_id, level_id) groups with their sample sizes.
+    final groupRows = await db.rawQuery(
+      '''
+      SELECT exercise_id, level_id, COUNT(*) AS sample_size
+      FROM attempts
+      WHERE avg_error_cents IS NOT NULL
+      GROUP BY exercise_id, level_id
+      ''',
+    );
+
+    final output = <ModeLevelPercentile>[];
+
+    for (final row in groupRows) {
+      final exerciseId = row['exercise_id'] as String;
+      final levelId = row['level_id'] as String;
+      final sampleSize = (row['sample_size'] as num).toInt();
+
+      if (sampleSize <= 0) {
+        continue;
+      }
+
+      // Percentile index: index = (p * (n - 1)).round()
+      int percentileIndex(double p) => (p * (sampleSize - 1)).round();
+
+      final p50Index = percentileIndex(0.50);
+      final p90Index = percentileIndex(0.90);
+
+      // Fetch the p50 value for this group from SQLite using ORDER BY + OFFSET.
+      final p50Rows = await db.rawQuery(
+        '''
+        SELECT ABS(avg_error_cents) AS abs_error
+        FROM attempts
+        WHERE avg_error_cents IS NOT NULL
+          AND exercise_id = ?
+          AND level_id = ?
+        ORDER BY abs_error
+        LIMIT 1 OFFSET ?
+        ''',
+        [exerciseId, levelId, p50Index],
+      );
+
+      // Fetch the p90 value for this group from SQLite using ORDER BY + OFFSET.
+      final p90Rows = await db.rawQuery(
+        '''
+        SELECT ABS(avg_error_cents) AS abs_error
+        FROM attempts
+        WHERE avg_error_cents IS NOT NULL
+          AND exercise_id = ?
+          AND level_id = ?
+        ORDER BY abs_error
+        LIMIT 1 OFFSET ?
+        ''',
+        [exerciseId, levelId, p90Index],
+      );
+
+      if (p50Rows.isEmpty || p90Rows.isEmpty) {
+        continue;
+      }
+
+      final p50ErrorCents = (p50Rows.first['abs_error'] as num).toDouble();
+      final p90ErrorCents = (p90Rows.first['abs_error'] as num).toDouble();
+      final mode = _modeFromExerciseId(exerciseId);
+
+      output.add(
+        ModeLevelPercentile(
+          mode: mode,
+          level: levelId,
+          sampleSize: sampleSize,
+          p50ErrorCents: p50ErrorCents,
+          p90ErrorCents: p90ErrorCents,
+        ),
+      );
+    }
+
+    output.sort((a, b) {
+      final modeCmp = a.mode.compareTo(b.mode);
+      if (modeCmp != 0) return modeCmp;
+      return a.level.compareTo(b.level);
+    });
+    return output;
+  }
+
+  Future<RetentionSnapshot> retentionSnapshot() async {
+    final db = await _database();
+    // Deduplicate mastery entries per (exercise_id, level_id) by taking the
+    // latest mastered_at_ms, then check retention for both windows in one pass.
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        COUNT(*) AS mastered,
+        SUM(
+          CASE WHEN EXISTS(
+            SELECT 1
+            FROM attempts a
+            WHERE a.exercise_id = m.exercise_id
+              AND a.level_id = m.level_id
+              AND a.success = 1
+              AND a.assisted = 0
+              AND a.created_at_ms > m.mastered_at_ms
+              AND a.created_at_ms <= m.mastered_at_ms + ?
+          ) THEN 1 ELSE 0 END
+        ) AS retained_7d,
+        SUM(
+          CASE WHEN EXISTS(
+            SELECT 1
+            FROM attempts a
+            WHERE a.exercise_id = m.exercise_id
+              AND a.level_id = m.level_id
+              AND a.success = 1
+              AND a.assisted = 0
+              AND a.created_at_ms > m.mastered_at_ms
+              AND a.created_at_ms <= m.mastered_at_ms + ?
+          ) THEN 1 ELSE 0 END
+        ) AS retained_30d
+      FROM (
+        SELECT exercise_id, level_id, MAX(mastered_at_ms) AS mastered_at_ms
+        FROM mastery_history
+        GROUP BY exercise_id, level_id
+      ) m
+      ''',
+      [7 * Duration.millisecondsPerDay, 30 * Duration.millisecondsPerDay],
+    );
+
+    final row = rows.first;
+    return RetentionSnapshot(
+      masteredCount: (row['mastered'] as num?)?.toInt() ?? 0,
+      retained7DayCount: (row['retained_7d'] as num?)?.toInt() ?? 0,
+      retained30DayCount: (row['retained_30d'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  static String _modeFromExerciseId(String exerciseId) {
+    final split = exerciseId.split('_');
+    return split.isEmpty ? exerciseId : split.first;
   }
 
   Future<SessionRecord?> sessionById(int id) async {

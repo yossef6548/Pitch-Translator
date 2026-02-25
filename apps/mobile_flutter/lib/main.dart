@@ -703,6 +703,8 @@ class AnalyzeOverviewScreen extends StatelessWidget {
     final trendsFuture = SessionRepository.instance.recentTrends();
     final seriesFuture = SessionRepository.instance.trendSeries(limit: 20);
     final weaknessFuture = SessionRepository.instance.weaknessMap();
+    final percentilesFuture = SessionRepository.instance.modeLevelPercentiles();
+    final retentionFuture = SessionRepository.instance.retentionSnapshot();
     return DefaultTabController(
       length: 3,
       child: SafeArea(
@@ -762,6 +764,49 @@ class AnalyzeOverviewScreen extends StatelessWidget {
                                 subtitle: Text(trend == null ? '—' : '${trend.driftPerSession.toStringAsFixed(2)} per session'),
                               ),
                               SizedBox(height: 96, child: _TrendSparkline(series: series, selector: (p) => p.driftCount.toDouble(), color: Colors.cyanAccent)),
+                              const SizedBox(height: 12),
+                              FutureBuilder<RetentionSnapshot>(
+                                future: retentionFuture,
+                                builder: (context, retentionSnapshot) {
+                                  final retention = retentionSnapshot.data;
+                                  final mastered = retention?.masteredCount ?? 0;
+                                  final ratio7d = retention == null ? '—' : '${(retention.retained7DayRatio * 100).round()}%';
+                                  final ratio30d = retention == null ? '—' : '${(retention.retained30DayRatio * 100).round()}%';
+                                  return ListTile(
+                                    title: const Text('Longitudinal retention'),
+                                    subtitle: Text('Masteries: $mastered • 7d: $ratio7d • 30d: $ratio30d'),
+                                  );
+                                },
+                              ),
+                              FutureBuilder<List<ModeLevelPercentile>>(
+                                future: percentilesFuture,
+                                builder: (context, percentileSnapshot) {
+                                  final percentiles = percentileSnapshot.data ?? const <ModeLevelPercentile>[];
+                                  if (percentiles.isEmpty) {
+                                    return const ListTile(
+                                      title: Text('Mode/level error percentiles'),
+                                      subtitle: Text('No attempt distribution yet.'),
+                                    );
+                                  }
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: Text('Mode/level error percentiles'),
+                                        subtitle: Text('Absolute cents error distribution by exercise mode and level.'),
+                                      ),
+                                      for (final row in percentiles)
+                                        ListTile(
+                                          dense: true,
+                                          title: Text('${row.mode} • ${row.level}'),
+                                          subtitle: Text('P50 ${row.p50ErrorCents.toStringAsFixed(1)}c • P90 ${row.p90ErrorCents.toStringAsFixed(1)}c'),
+                                          trailing: Text('n=${row.sampleSize}'),
+                                        ),
+                                    ],
+                                  );
+                                },
+                              ),
                             ],
                           );
                         },
@@ -1167,8 +1212,16 @@ class SettingsScreen extends StatelessWidget {
               ListTile(title: const Text('Pitch Detection'), subtitle: Text('Suggested profile: ${summary['detection_profile'] ?? 'Standard'}')),
               const ListTile(title: Text('Feedback & Representation'), subtitle: Text('Shape/color mapping editor and preview.')),
               const ListTile(title: Text('Audio'), subtitle: Text('Input route, reference output, latency diagnostics.')),
-              ListTile(title: const Text('Training'), subtitle: Text('Assisted-attempt ratio: ${summary['assist_ratio'] ?? '0%'}')),
-              ListTile(title: const Text('Data & Privacy'), subtitle: Text(summary['privacy'] ?? 'Local-only SQLite storage')),
+              ListTile(
+                title: const Text('Training'),
+                subtitle: Text(
+                  'Assisted-attempt ratio: ${summary['assist_ratio'] ?? '0%'} • 30-day retention: ${summary['retention_30d'] ?? '0%'}',
+                ),
+              ),
+              ListTile(
+                title: const Text('Data & Privacy'),
+                subtitle: Text('${summary['privacy'] ?? 'Local-only SQLite storage'} • Analytics coverage: ${summary['percentile_coverage'] ?? '0 mode/level groups'}'),
+              ),
               const ListTile(title: Text('About'), subtitle: Text('Version, licenses and support links.')),
             ],
           );
