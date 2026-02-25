@@ -44,6 +44,10 @@ This monorepo includes:
 - Drift telemetry upgraded with deterministic counters/metrics:
   - confirmed drift event count (`confirmedDriftCount`)
   - average recovery time after drift confirmation (`averageRecoveryTimeMs`)
+- Drift snippet persistence integrated in Flutter session flow:
+  - rolling DSP frame history buffer retained during active exercise
+  - per-drift JSON snippet captured under local app storage (`drift_snippets`)
+  - persisted snippet path linked into `drift_events.audio_snippet_uri` for replay/library analytics
 
 ### App navigation and primary UI flows
 
@@ -118,9 +122,9 @@ This monorepo includes:
    - Add end-to-end mic route-change and audio-focus-loss tests
    - Add device-matrix latency profiling and long-session stability checks
 
-3. **Replay media integration for real snippets**
-   - Current drift replay uses deterministic payload snapshots
-   - Real captured audio snippet persistence/playback is still pending
+3. **Replay media playback integration for persisted snippets**
+   - ✅ Snippet capture + persistence path implemented (JSON frame snippets)
+   - UI playback controls for these persisted snippets are still pending
 
 4. **Design-system completion and accessibility tuning**
    - Full tokenization sweep (spacing/typography/motion/color)
@@ -145,6 +149,7 @@ This monorepo includes:
 | Progression/unlock | ✅ covered | PR-01 and PR-02 mapped directly to QA tests |
 | Visual determinism | ✅ covered | VD-01 and VD-02 covered |
 | Failure modes | ⚠️ partial | FM-01 and FM-02 covered at engine layer; Flutter channel fallback path covered, but native route harness is still pending |
+| Drift snippet persistence | ✅ covered | Drift confirmation now persists rolling JSON snippets and stores URI in analytics DB |
 
 ---
 
@@ -152,7 +157,7 @@ This monorepo includes:
 
 1. Native iOS/Android audio callback implementations behind the now-defined Flutter channel contract
 2. Native integration/performance QA matrix execution on physical device matrix
-3. Drift replay audio snippet capture/playback integration
+3. Drift replay snippet playback controls in `DRIFT_REPLAY` and Library surfaces
 4. Design tokenization + accessibility closure
 5. DSP hardening/device validation
 6. Production burn-in and release checklist completion
@@ -210,7 +215,7 @@ cmake --build /tmp/pt-dsp-build
 /tmp/pt-dsp-build/pt_dsp_tests
 ```
 
-> Note: Flutter/Dart CLI was unavailable in this execution container, so Flutter tests must be run on a machine/CI runner with Flutter SDK available.
+> Note: Flutter/Dart CLI was unavailable in this execution container (`flutter` and `dart` commands not found under expected PATHs and `/tmp`), so Flutter tests must be run on a machine/CI runner with Flutter SDK available.
 
 ---
 
