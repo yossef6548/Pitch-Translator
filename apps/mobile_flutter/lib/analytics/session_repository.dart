@@ -80,6 +80,38 @@ class WeaknessMapCell {
   final int attemptCount;
 }
 
+class ModeLevelPercentile {
+  const ModeLevelPercentile({
+    required this.mode,
+    required this.level,
+    required this.sampleSize,
+    required this.p50ErrorCents,
+    required this.p90ErrorCents,
+  });
+
+  final String mode;
+  final String level;
+  final int sampleSize;
+  final double p50ErrorCents;
+  final double p90ErrorCents;
+}
+
+class RetentionSnapshot {
+  const RetentionSnapshot({
+    required this.masteredCount,
+    required this.retained7DayCount,
+    required this.retained30DayCount,
+  });
+
+  final int masteredCount;
+  final int retained7DayCount;
+  final int retained30DayCount;
+
+  double get retained7DayRatio => masteredCount == 0 ? 0 : retained7DayCount / masteredCount;
+
+  double get retained30DayRatio => masteredCount == 0 ? 0 : retained30DayCount / masteredCount;
+}
+
 class DriftEventRecord {
   const DriftEventRecord({
     required this.id,
@@ -396,6 +428,8 @@ class SessionRepository {
     final db = await _database();
     final attemptsRows = await db.rawQuery('SELECT COUNT(*) AS total, SUM(assisted) AS assisted FROM attempts');
     final avgRows = await db.rawQuery('SELECT AVG(avg_error_cents) AS avg_error FROM sessions');
+    final retention = await retentionSnapshot();
+    final percentiles = await modeLevelPercentiles();
     final row = attemptsRows.first;
     final total = (row['total'] as num?)?.toInt() ?? 0;
     final assisted = (row['assisted'] as num?)?.toInt() ?? 0;
@@ -403,8 +437,127 @@ class SessionRepository {
     return {
       'detection_profile': avgError <= 20 ? 'Strict' : avgError <= 35 ? 'Standard' : 'Relaxed',
       'assist_ratio': total == 0 ? '0%' : '${((assisted / total) * 100).round()}%',
+      'retention_30d': retention.masteredCount == 0 ? '0%' : '${(retention.retained30DayRatio * 100).round()}%',
+      'percentile_coverage': '${percentiles.length} mode/level groups',
       'privacy': 'Local-only SQLite storage',
     };
+  }
+
+  Future<List<ModeLevelPercentile>> modeLevelPercentiles() async {
+    final db = await _database();
+    final rows = await db.query(
+      'attempts',
+      columns: ['exercise_id', 'level_id', 'avg_error_cents'],
+      where: 'avg_error_cents IS NOT NULL',
+    );
+
+    final grouped = <String, List<double>>{};
+    for (final row in rows) {
+      final exerciseId = row['exercise_id'] as String;
+      final levelId = row['level_id'] as String;
+      final avgErrorCents = (row['avg_error_cents'] as num?)?.toDouble();
+      if (avgErrorCents == null) {
+        continue;
+      }
+      final mode = _modeFromExerciseId(exerciseId);
+      final key = '$mode|$levelId';
+      grouped.putIfAbsent(key, () => <double>[]).add(avgErrorCents.abs());
+    }
+
+    final output = <ModeLevelPercentile>[];
+    for (final entry in grouped.entries) {
+      final parts = entry.key.split('|');
+      final values = entry.value..sort();
+      output.add(
+        ModeLevelPercentile(
+          mode: parts.first,
+          level: parts.last,
+          sampleSize: values.length,
+          p50ErrorCents: _percentile(values, 0.50),
+          p90ErrorCents: _percentile(values, 0.90),
+        ),
+      );
+    }
+
+    output.sort((a, b) {
+      final modeCmp = a.mode.compareTo(b.mode);
+      if (modeCmp != 0) return modeCmp;
+      return a.level.compareTo(b.level);
+    });
+    return output;
+  }
+
+  Future<RetentionSnapshot> retentionSnapshot() async {
+    final db = await _database();
+    final retained7Day = await db.rawQuery(
+      '''
+      SELECT
+        COUNT(*) AS mastered,
+        SUM(
+          CASE WHEN EXISTS(
+            SELECT 1
+            FROM attempts a
+            WHERE a.exercise_id = m.exercise_id
+              AND a.level_id = m.level_id
+              AND a.success = 1
+              AND a.assisted = 0
+              AND a.created_at_ms > m.mastered_at_ms
+              AND a.created_at_ms <= m.mastered_at_ms + ?
+          ) THEN 1 ELSE 0 END
+        ) AS retained
+      FROM mastery_history m
+      ''',
+      [7 * Duration.millisecondsPerDay],
+    );
+    final retained30Day = await db.rawQuery(
+      '''
+      SELECT
+        COUNT(*) AS mastered,
+        SUM(
+          CASE WHEN EXISTS(
+            SELECT 1
+            FROM attempts a
+            WHERE a.exercise_id = m.exercise_id
+              AND a.level_id = m.level_id
+              AND a.success = 1
+              AND a.assisted = 0
+              AND a.created_at_ms > m.mastered_at_ms
+              AND a.created_at_ms <= m.mastered_at_ms + ?
+          ) THEN 1 ELSE 0 END
+        ) AS retained
+      FROM mastery_history m
+      ''',
+      [30 * Duration.millisecondsPerDay],
+    );
+
+    final masteredCount = (retained7Day.first['mastered'] as num?)?.toInt() ?? 0;
+    return RetentionSnapshot(
+      masteredCount: masteredCount,
+      retained7DayCount: (retained7Day.first['retained'] as num?)?.toInt() ?? 0,
+      retained30DayCount: (retained30Day.first['retained'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  static String _modeFromExerciseId(String exerciseId) {
+    final split = exerciseId.split('_');
+    return split.isEmpty ? exerciseId : split.first;
+  }
+
+  static double _percentile(List<double> sortedValues, double percentile) {
+    if (sortedValues.isEmpty) {
+      return 0;
+    }
+    if (sortedValues.length == 1) {
+      return sortedValues.first;
+    }
+    final rank = (sortedValues.length - 1) * percentile;
+    final lower = rank.floor();
+    final upper = rank.ceil();
+    if (lower == upper) {
+      return sortedValues[lower];
+    }
+    final weight = rank - lower;
+    return sortedValues[lower] + ((sortedValues[upper] - sortedValues[lower]) * weight);
   }
 
   Future<SessionRecord?> sessionById(int id) async {
