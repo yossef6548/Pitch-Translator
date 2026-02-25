@@ -177,7 +177,7 @@ class SessionRepository {
 
     _db = await openDatabase(
       dbPath,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async => _createSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -188,6 +188,9 @@ class SessionRepository {
         }
         if (oldVersion < 4) {
           await _migrateToV4(db);
+        }
+        if (oldVersion < 5) {
+          await _migrateToV5(db);
         }
       },
     );
@@ -211,6 +214,7 @@ class SessionRepository {
     await _createV2Tables(db);
     await _migrateToV3(db);
     await _migrateToV4(db);
+    await _migrateToV5(db);
   }
 
   Future<void> _createV2Tables(Database db) async {
@@ -287,6 +291,15 @@ class SessionRepository {
     if (!existingColumns.contains('audio_snippet_uri')) {
       await db.execute('ALTER TABLE drift_events ADD COLUMN audio_snippet_uri TEXT');
     }
+  }
+
+  Future<void> _migrateToV5(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_attempts_lookup ON attempts(exercise_id, level_id, created_at_ms, success, assisted)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_mastery_lookup ON mastery_history(exercise_id, level_id, mastered_at_ms)',
+    );
   }
 
   Future<int> recordSession({
@@ -426,10 +439,16 @@ class SessionRepository {
 
   Future<Map<String, String>> settingsSummary() async {
     final db = await _database();
-    final attemptsRows = await db.rawQuery('SELECT COUNT(*) AS total, SUM(assisted) AS assisted FROM attempts');
-    final avgRows = await db.rawQuery('SELECT AVG(avg_error_cents) AS avg_error FROM sessions');
-    final retention = await retentionSnapshot();
-    final percentiles = await modeLevelPercentiles();
+    // Start all independent async operations concurrently to reduce overall latency.
+    final attemptsFuture = db.rawQuery('SELECT COUNT(*) AS total, SUM(assisted) AS assisted FROM attempts');
+    final avgFuture = db.rawQuery('SELECT AVG(avg_error_cents) AS avg_error FROM sessions');
+    final retentionFuture = retentionSnapshot();
+    final percentilesFuture = modeLevelPercentiles();
+
+    final attemptsRows = await attemptsFuture;
+    final avgRows = await avgFuture;
+    final retention = await retentionFuture;
+    final percentiles = await percentilesFuture;
     final row = attemptsRows.first;
     final total = (row['total'] as num?)?.toInt() ?? 0;
     final assisted = (row['assisted'] as num?)?.toInt() ?? 0;
@@ -445,36 +464,77 @@ class SessionRepository {
 
   Future<List<ModeLevelPercentile>> modeLevelPercentiles() async {
     final db = await _database();
-    final rows = await db.query(
-      'attempts',
-      columns: ['exercise_id', 'level_id', 'avg_error_cents'],
-      where: 'avg_error_cents IS NOT NULL',
+
+    // First, get the distinct (exercise_id, level_id) groups with their sample sizes.
+    final groupRows = await db.rawQuery(
+      '''
+      SELECT exercise_id, level_id, COUNT(*) AS sample_size
+      FROM attempts
+      WHERE avg_error_cents IS NOT NULL
+      GROUP BY exercise_id, level_id
+      ''',
     );
 
-    final grouped = <String, List<double>>{};
-    for (final row in rows) {
+    final output = <ModeLevelPercentile>[];
+
+    for (final row in groupRows) {
       final exerciseId = row['exercise_id'] as String;
       final levelId = row['level_id'] as String;
-      final avgErrorCents = (row['avg_error_cents'] as num?)?.toDouble();
-      if (avgErrorCents == null) {
+      final sampleSize = (row['sample_size'] as num).toInt();
+
+      if (sampleSize <= 0) {
         continue;
       }
-      final mode = _modeFromExerciseId(exerciseId);
-      final key = '$mode|$levelId';
-      grouped.putIfAbsent(key, () => <double>[]).add(avgErrorCents.abs());
-    }
 
-    final output = <ModeLevelPercentile>[];
-    for (final entry in grouped.entries) {
-      final parts = entry.key.split('|');
-      final values = entry.value..sort();
+      // Percentile index: index = (p * (n - 1)).round()
+      int percentileIndex(double p) => (p * (sampleSize - 1)).round();
+
+      final p50Index = percentileIndex(0.50);
+      final p90Index = percentileIndex(0.90);
+
+      // Fetch the p50 value for this group from SQLite using ORDER BY + OFFSET.
+      final p50Rows = await db.rawQuery(
+        '''
+        SELECT ABS(avg_error_cents) AS abs_error
+        FROM attempts
+        WHERE avg_error_cents IS NOT NULL
+          AND exercise_id = ?
+          AND level_id = ?
+        ORDER BY abs_error
+        LIMIT 1 OFFSET ?
+        ''',
+        [exerciseId, levelId, p50Index],
+      );
+
+      // Fetch the p90 value for this group from SQLite using ORDER BY + OFFSET.
+      final p90Rows = await db.rawQuery(
+        '''
+        SELECT ABS(avg_error_cents) AS abs_error
+        FROM attempts
+        WHERE avg_error_cents IS NOT NULL
+          AND exercise_id = ?
+          AND level_id = ?
+        ORDER BY abs_error
+        LIMIT 1 OFFSET ?
+        ''',
+        [exerciseId, levelId, p90Index],
+      );
+
+      if (p50Rows.isEmpty || p90Rows.isEmpty) {
+        continue;
+      }
+
+      final p50ErrorCents = (p50Rows.first['abs_error'] as num).toDouble();
+      final p90ErrorCents = (p90Rows.first['abs_error'] as num).toDouble();
+      final mode = _modeFromExerciseId(exerciseId);
+
       output.add(
         ModeLevelPercentile(
-          mode: parts.first,
-          level: parts.last,
-          sampleSize: values.length,
-          p50ErrorCents: _percentile(values, 0.50),
-          p90ErrorCents: _percentile(values, 0.90),
+          mode: mode,
+          level: levelId,
+          sampleSize: sampleSize,
+          p50ErrorCents: p50ErrorCents,
+          p90ErrorCents: p90ErrorCents,
         ),
       );
     }
@@ -489,7 +549,9 @@ class SessionRepository {
 
   Future<RetentionSnapshot> retentionSnapshot() async {
     final db = await _database();
-    final retained7Day = await db.rawQuery(
+    // Deduplicate mastery entries per (exercise_id, level_id) by taking the
+    // latest mastered_at_ms, then check retention for both windows in one pass.
+    final rows = await db.rawQuery(
       '''
       SELECT
         COUNT(*) AS mastered,
@@ -504,15 +566,7 @@ class SessionRepository {
               AND a.created_at_ms > m.mastered_at_ms
               AND a.created_at_ms <= m.mastered_at_ms + ?
           ) THEN 1 ELSE 0 END
-        ) AS retained
-      FROM mastery_history m
-      ''',
-      [7 * Duration.millisecondsPerDay],
-    );
-    final retained30Day = await db.rawQuery(
-      '''
-      SELECT
-        COUNT(*) AS mastered,
+        ) AS retained_7d,
         SUM(
           CASE WHEN EXISTS(
             SELECT 1
@@ -524,40 +578,27 @@ class SessionRepository {
               AND a.created_at_ms > m.mastered_at_ms
               AND a.created_at_ms <= m.mastered_at_ms + ?
           ) THEN 1 ELSE 0 END
-        ) AS retained
-      FROM mastery_history m
+        ) AS retained_30d
+      FROM (
+        SELECT exercise_id, level_id, MAX(mastered_at_ms) AS mastered_at_ms
+        FROM mastery_history
+        GROUP BY exercise_id, level_id
+      ) m
       ''',
-      [30 * Duration.millisecondsPerDay],
+      [7 * Duration.millisecondsPerDay, 30 * Duration.millisecondsPerDay],
     );
 
-    final masteredCount = (retained7Day.first['mastered'] as num?)?.toInt() ?? 0;
+    final row = rows.first;
     return RetentionSnapshot(
-      masteredCount: masteredCount,
-      retained7DayCount: (retained7Day.first['retained'] as num?)?.toInt() ?? 0,
-      retained30DayCount: (retained30Day.first['retained'] as num?)?.toInt() ?? 0,
+      masteredCount: (row['mastered'] as num?)?.toInt() ?? 0,
+      retained7DayCount: (row['retained_7d'] as num?)?.toInt() ?? 0,
+      retained30DayCount: (row['retained_30d'] as num?)?.toInt() ?? 0,
     );
   }
 
   static String _modeFromExerciseId(String exerciseId) {
     final split = exerciseId.split('_');
     return split.isEmpty ? exerciseId : split.first;
-  }
-
-  static double _percentile(List<double> sortedValues, double percentile) {
-    if (sortedValues.isEmpty) {
-      return 0;
-    }
-    if (sortedValues.length == 1) {
-      return sortedValues.first;
-    }
-    final rank = (sortedValues.length - 1) * percentile;
-    final lower = rank.floor();
-    final upper = rank.ceil();
-    if (lower == upper) {
-      return sortedValues[lower];
-    }
-    final weight = rank - lower;
-    return sortedValues[lower] + ((sortedValues[upper] - sortedValues[lower]) * weight);
   }
 
   Future<SessionRecord?> sessionById(int id) async {
