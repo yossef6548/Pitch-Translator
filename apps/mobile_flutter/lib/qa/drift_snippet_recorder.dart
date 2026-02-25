@@ -27,6 +27,7 @@ class DriftSnippetRecorder {
     required int sessionStartMs,
     required int eventIndex,
   }) async {
+    final snapshot = List<DspFrame>.unmodifiable(_buffer);
     final baseDir = await _baseDirectoryProvider();
     final snippetsDir = Directory(p.join(baseDir, 'drift_snippets'));
     if (!await snippetsDir.exists()) {
@@ -41,19 +42,8 @@ class DriftSnippetRecorder {
       'sessionStartMs': sessionStartMs,
       'eventIndex': eventIndex,
       'capturedAtMs': DateTime.now().millisecondsSinceEpoch,
-      'frameCount': _buffer.length,
-      'frames': _buffer
-          .map(
-            (frame) => {
-              'timestampMs': frame.timestampMs,
-              'freqHz': frame.freqHz,
-              'centsError': frame.centsError,
-              'confidence': frame.confidence,
-              'nearestMidi': frame.nearestMidi,
-              'isVoiced': frame.isVoiced,
-            },
-          )
-          .toList(growable: false),
+      'frameCount': snapshot.length,
+      'frames': snapshot.map((frame) => frame.toJson()).toList(growable: false),
     };
 
     final file = File(filePath);

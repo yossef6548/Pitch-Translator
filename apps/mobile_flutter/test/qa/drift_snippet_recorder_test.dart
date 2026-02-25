@@ -22,31 +22,34 @@ void main() {
     recorder.addFrame(
       const DspFrame(
         timestampMs: 1000,
-        freqHz: 440,
-        centsError: 10,
-        confidence: 0.95,
+        freqHz: 440.0,
+        midiFloat: 69.0,
         nearestMidi: 69,
-        isVoiced: true,
+        centsError: 10.0,
+        confidence: 0.95,
+        vibrato: VibratoInfo(detected: false),
       ),
     );
     recorder.addFrame(
       const DspFrame(
         timestampMs: 1190,
-        freqHz: 441,
-        centsError: 6,
-        confidence: 0.96,
+        freqHz: 441.0,
+        midiFloat: 69.0,
         nearestMidi: 69,
-        isVoiced: true,
+        centsError: 6.0,
+        confidence: 0.96,
+        vibrato: VibratoInfo(detected: false),
       ),
     );
     recorder.addFrame(
       const DspFrame(
         timestampMs: 1300,
-        freqHz: 439,
-        centsError: -8,
-        confidence: 0.92,
+        freqHz: 439.0,
+        midiFloat: 68.97,
         nearestMidi: 69,
-        isVoiced: true,
+        centsError: -8.0,
+        confidence: 0.92,
+        vibrato: VibratoInfo(detected: false),
       ),
     );
 
@@ -61,6 +64,6 @@ void main() {
     expect(json['frameCount'], 2);
 
     final frames = (json['frames'] as List).cast<Map<String, dynamic>>();
-    expect(frames.map((f) => f['timestampMs']), [1190, 1300]);
+    expect(frames.map((f) => f['timestamp_ms']), [1190, 1300]);
   });
 }
