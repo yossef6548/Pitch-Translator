@@ -108,6 +108,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Added runtime recording from `LIVE_PITCH` into session rows and linked attempt/drift/mastery records
   - Added aggregate summary APIs powering data-backed Library/Settings sections
   - Added trend aggregation API (`avg_error_cents`, `stability_score`, `drift/session`)
+- Drift event storage upgraded to include replay snapshots (`before_*`, `after_*`) and snippet attachment URI for per-marker playback context
 
 - **Deterministic QA replay harness**
   - Reusable `ReplayHarness` that executes recorded `DspFrame` streams against `TrainingEngine`
@@ -150,7 +151,9 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Live pitch target header now reflects configured target note/octave and MIDI.
 
 **Still required**
-- Add native audio snippet attachment and true replay playback when tapping Session Detail drift markers
+- Attach drift replay metadata (before/after cents+MIDI/frequency and snippet URI) in persistence so marker rows can open deterministic replay data
+- Replace Session Detail drift marker placeholder with an interactive replay sheet (playback progress, interpolated cents timeline, before/after delta)
+- Add native audio capture pipeline to persist real mic snippet files for replay (current snippet URI is metadata-only scaffold)
 - Apply full design token system (typography scale, spacing roles, motion curves, accessibility palettes)
 - Implement complete quick-monitor passive mic preview widget on HOME_TODAY card
 
@@ -253,6 +256,19 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
   - Persists completion before transitioning to `AppShell` so first-run gating behaves correctly across relaunches.
 
 
+### Drift replay persistence + playback UX (this iteration)
+
+- `apps/mobile_flutter/lib/analytics/session_repository.dart`
+  - Upgraded DB schema to version 4 with drift-event replay payload columns:
+    - `before_midi`, `before_cents`, `before_freq_hz`
+    - `after_midi`, `after_cents`, `after_freq_hz`
+    - `audio_snippet_uri`
+  - Added strongly-typed `DriftEventWrite` write model so LIVE_PITCH can persist replay-ready marker payloads per confirmed drift.
+  - Extended drift-event read models to return replay payload fields for Session Detail playback.
+- `apps/mobile_flutter/lib/main.dart`
+  - LIVE_PITCH now captures and persists deterministic before/after drift snapshots as each drift is confirmed.
+  - Session Detail drift markers now open a replay sheet with timeline progress playback, before/after values, and delta display instead of placeholder copy.
+
 ### Analyze charts + weakness analytics (this iteration)
 
 - `apps/mobile_flutter/lib/analytics/session_repository.dart`
@@ -284,6 +300,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Added `apps/mobile_flutter/test/root_flow_onboarding_test.dart` widget tests covering persisted onboarding skip and first-run completion persistence behavior.
 - Added failure-path widget coverage proving `RootFlow` exits loading state and shows onboarding when `SharedPreferences` read fails.
 - Flutter SDK/Dart CLI was not available in this container during this pass, so Flutter tests could not be re-run here.
+- Screenshot capture for updated replay UI could not be produced in this environment because Flutter runtime/tooling is unavailable, so the app could not be launched for browser-container capture.
 - DSP smoke build commands remain runnable in this environment and were re-verified in this pass.
 
 ### Training engine drift replay capture
