@@ -5,16 +5,7 @@ import 'package:pitch_translator/qa/replay_harness.dart';
 import 'package:pitch_translator/training/training_engine.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
-DspFrame frame(int ts, {double? cents = 0, double confidence = 0.9}) =>
-    DspFrame(
-      timestampMs: ts,
-      freqHz: cents == null ? null : 440,
-      midiFloat: cents == null ? null : 69,
-      nearestMidi: cents == null ? null : 69,
-      centsError: cents,
-      confidence: confidence,
-      vibrato: const VibratoInfo(detected: false),
-    );
+import '../support/dsp_frame_factory.dart';
 
 void main() {
   test('QA-G-01 null pitch handling enters low confidence', () {
@@ -23,7 +14,7 @@ void main() {
 
     final harness = ReplayHarness(engine);
     final frames =
-        List.generate(20, (i) => frame(i * 10, cents: null, confidence: 0.8));
+        List.generate(20, (i) => dspFrame(i * 10, cents: null, confidence: 0.8));
     final result = harness.runFrames(frames);
 
     expect(result.finalState.id, LivePitchStateId.lowConfidence);
@@ -33,16 +24,17 @@ void main() {
 
   test('QA-DA-01 drift candidate recovery returns to locked', () {
     final engine = TrainingEngine(
-        config: const ExerciseConfig(countdownMs: 0, driftAwarenessMode: true));
+      config: const ExerciseConfig(countdownMs: 0, driftAwarenessMode: true),
+    );
     engine.onIntent(TrainingIntent.start);
 
     final frames = <DspFrame>[
-      frame(0, cents: 5),
-      frame(150, cents: 4),
-      frame(320, cents: 3),
-      frame(900, cents: 31),
-      frame(960, cents: 31),
-      frame(1030, cents: 10),
+      dspFrame(0, cents: 5),
+      dspFrame(150, cents: 4),
+      dspFrame(320, cents: 3),
+      dspFrame(900, cents: 31),
+      dspFrame(960, cents: 31),
+      dspFrame(1030, cents: 10),
     ];
 
     final result = ReplayHarness(engine).runFrames(frames);
@@ -50,22 +42,48 @@ void main() {
     expect(result.finalState.id, LivePitchStateId.locked);
   });
 
+  test('QA-DA-02 drift replay trigger enters drift confirmed', () {
+    final engine = TrainingEngine(
+      config: const ExerciseConfig(
+        countdownMs: 0,
+        driftAwarenessMode: false,
+        driftThresholdCents: 30,
+      ),
+    );
+    engine.onIntent(TrainingIntent.start);
+
+    final frames = <DspFrame>[
+      dspFrame(0, cents: 3),
+      dspFrame(170, cents: 2),
+      dspFrame(340, cents: 1),
+      dspFrame(900, cents: 40),
+      dspFrame(1030, cents: 40),
+      dspFrame(1170, cents: 40),
+      dspFrame(1300, cents: 40),
+    ];
+
+    final result = ReplayHarness(engine).runFrames(frames);
+
+    expect(result.visited(LivePitchStateId.driftCandidate), isTrue);
+    expect(result.finalState.id, LivePitchStateId.driftConfirmed);
+    expect(result.firstTransitionTo(LivePitchStateId.driftConfirmed), isNotNull);
+  });
+
   test('QA-G-02 confidence override breaks lock immediately', () {
     final engine = TrainingEngine(config: const ExerciseConfig(countdownMs: 0));
     engine.onIntent(TrainingIntent.start);
 
     final harness = ReplayHarness(engine);
-    // Low-confidence sustained for ~500 ms (500–1000 ms) to match spec QA-G-02.
     final frames = <DspFrame>[
-      frame(0, cents: 2, confidence: 0.92),
-      frame(160, cents: 1, confidence: 0.92),
-      frame(340, cents: 1, confidence: 0.92),
-      frame(500, cents: 0, confidence: 0.55),
-      frame(600, cents: 0, confidence: 0.55),
-      frame(700, cents: 0, confidence: 0.55),
-      frame(800, cents: 0, confidence: 0.55),
-      frame(900, cents: 0, confidence: 0.55),
-      frame(1000, cents: 0, confidence: 0.55),
+      dspFrame(0, cents: 2, confidence: 0.92),
+      dspFrame(160, cents: 1, confidence: 0.92),
+      dspFrame(340, cents: 1, confidence: 0.92),
+      dspFrame(500, cents: 0, confidence: 0.55),
+      dspFrame(600, cents: 0, confidence: 0.55),
+      dspFrame(700, cents: 0, confidence: 0.55),
+      dspFrame(800, cents: 0, confidence: 0.55),
+      dspFrame(900, cents: 0, confidence: 0.55),
+      dspFrame(1000, cents: 0, confidence: 0.55),
     ];
     final result = harness.runFrames(frames);
 
@@ -79,24 +97,42 @@ void main() {
     final engine = TrainingEngine(config: const ExerciseConfig(countdownMs: 0));
     engine.onIntent(TrainingIntent.start);
 
-    DspFrame vibratoFrame(int ts, double cents) => DspFrame(
-          timestampMs: ts,
-          freqHz: 440,
-          midiFloat: 69,
-          nearestMidi: 69,
-          centsError: cents,
-          confidence: 0.9,
-          vibrato: const VibratoInfo(detected: true, rateHz: 6, depthCents: 25),
-        );
-
     final frames = <DspFrame>[
-      vibratoFrame(0, -25),
-      vibratoFrame(120, 25),
-      vibratoFrame(240, -25),
-      vibratoFrame(360, 25),
-      vibratoFrame(820, -25),
-      vibratoFrame(950, 25),
-      vibratoFrame(1100, -25),
+      dspFrame(0,
+          cents: -25,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 25),
+      dspFrame(120,
+          cents: 25,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 25),
+      dspFrame(240,
+          cents: -25,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 25),
+      dspFrame(360,
+          cents: 25,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 25),
+      dspFrame(820,
+          cents: -25,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 25),
+      dspFrame(950,
+          cents: 25,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 25),
+      dspFrame(1100,
+          cents: -25,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 25),
     ];
 
     final result = ReplayHarness(engine).runFrames(frames);
@@ -115,24 +151,30 @@ void main() {
     );
     engine.onIntent(TrainingIntent.start);
 
-    DspFrame deepVibratoFrame(int ts, double cents) => DspFrame(
-          timestampMs: ts,
-          freqHz: 440,
-          midiFloat: 69,
-          nearestMidi: 69,
-          centsError: cents,
-          confidence: 0.9,
-          vibrato: const VibratoInfo(detected: true, rateHz: 6, depthCents: 45),
-        );
-
     final frames = <DspFrame>[
-      frame(0, cents: 4),
-      frame(160, cents: 3),
-      frame(340, cents: 2),
-      deepVibratoFrame(900, 40),
-      deepVibratoFrame(1020, 40),
-      deepVibratoFrame(1160, 40),
-      deepVibratoFrame(1320, 40),
+      dspFrame(0, cents: 4),
+      dspFrame(160, cents: 3),
+      dspFrame(340, cents: 2),
+      dspFrame(900,
+          cents: 40,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 45),
+      dspFrame(1020,
+          cents: 40,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 45),
+      dspFrame(1160,
+          cents: 40,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 45),
+      dspFrame(1320,
+          cents: 40,
+          vibratoDetected: true,
+          vibratoRateHz: 6,
+          vibratoDepthCents: 45),
     ];
 
     final result = ReplayHarness(engine).runFrames(frames);
@@ -145,7 +187,7 @@ void main() {
     engine.onIntent(TrainingIntent.start);
 
     final result = ReplayHarness(engine).runFrames([
-      frame(0, cents: 50),
+      dspFrame(0, cents: 50),
     ]);
 
     expect(
@@ -165,7 +207,7 @@ void main() {
     engine.onIntent(TrainingIntent.start);
 
     final result = ReplayHarness(engine).runFrames([
-      frame(0, cents: driftThreshold),
+      dspFrame(0, cents: driftThreshold),
     ]);
 
     expect(result.finalState.deformPx, closeTo(PtConstants.maxDeformPx, 0.0001));
