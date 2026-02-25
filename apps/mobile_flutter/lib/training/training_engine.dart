@@ -19,6 +19,15 @@ class TrainingEngine {
   final Queue<DspFrame> _recentFrames = Queue<DspFrame>();
   DriftEvent? lastDriftEvent;
   DspFrame? _lastLockedFrame;
+  int _confirmedDriftCount = 0;
+  int? _driftConfirmedAtMs;
+  final List<int> _recoveryTimesMs = <int>[];
+
+  int get confirmedDriftCount => _confirmedDriftCount;
+  double? get averageRecoveryTimeMs =>
+      _recoveryTimesMs.isEmpty
+          ? null
+          : _recoveryTimesMs.reduce((a, b) => a + b) / _recoveryTimesMs.length;
 
   void _resetSessionAccumulators() {
     _lastTimestampMs = null;
@@ -28,6 +37,9 @@ class TrainingEngine {
     _returnStateAfterOverride = LivePitchStateId.idle;
     _recentFrames.clear();
     lastDriftEvent = null;
+    _confirmedDriftCount = 0;
+    _driftConfirmedAtMs = null;
+    _recoveryTimesMs.clear();
   }
 
   void onDspFrame(DspFrame frame) {
@@ -82,6 +94,10 @@ class TrainingEngine {
         _lockedTimeMs = 0;
         _outsideDriftMs = 0;
         _lastLockedFrame = frame;
+        if (_driftConfirmedAtMs != null) {
+          _recoveryTimesMs.add(max(0, frame.timestampMs - _driftConfirmedAtMs!));
+          _driftConfirmedAtMs = null;
+        }
       }
     } else if (prior == LivePitchStateId.locked) {
       _lastLockedFrame = frame;
@@ -105,6 +121,8 @@ class TrainingEngine {
         _outsideDriftMs += dt;
         if (_outsideDriftMs >= PtConstants.driftConfirmTimeMs) {
           next = LivePitchStateId.driftConfirmed;
+          _confirmedDriftCount += 1;
+          _driftConfirmedAtMs = frame.timestampMs;
           if (_lastLockedFrame != null) {
             lastDriftEvent =
                 DriftEvent(before: _lastLockedFrame!, after: frame);
