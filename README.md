@@ -151,8 +151,6 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Live pitch target header now reflects configured target note/octave and MIDI.
 
 **Still required**
-- Attach drift replay metadata (before/after cents+MIDI/frequency and snippet URI) in persistence so marker rows can open deterministic replay data
-- Replace Session Detail drift marker placeholder with an interactive replay sheet (playback progress, interpolated cents timeline, before/after delta)
 - Add native audio capture pipeline to persist real mic snippet files for replay (current snippet URI is metadata-only scaffold)
 - Apply full design token system (typography scale, spacing roles, motion curves, accessibility palettes)
 - Implement complete quick-monitor passive mic preview widget on HOME_TODAY card

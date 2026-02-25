@@ -885,7 +885,7 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
         return;
       }
       setState(() {
-        _progress = (_progress + 0.08).clamp(0, 1);
+        _progress = (_progress + 0.016).clamp(0, 1);
       });
       if (_progress >= 1) {
         timer.cancel();
@@ -895,10 +895,11 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
 
   @override
   Widget build(BuildContext context) {
-    final beforeCents = widget.event.beforeCents ?? 0;
-    final afterCents = widget.event.afterCents ?? beforeCents;
-    final liveCents = beforeCents + ((afterCents - beforeCents) * _progress);
-    final delta = afterCents - beforeCents;
+    final beforeCents = widget.event.beforeCents;
+    final afterCents = widget.event.afterCents;
+    final hasData = beforeCents != null && afterCents != null;
+    final liveCents = hasData ? beforeCents + ((afterCents - beforeCents) * _progress) : null;
+    final delta = hasData ? afterCents - beforeCents : null;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -913,14 +914,18 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
           const SizedBox(height: 12),
           LinearProgressIndicator(value: _progress),
           const SizedBox(height: 12),
-          Text('Before: ${beforeCents.toStringAsFixed(1)}c (MIDI ${widget.event.beforeMidi ?? '—'})'),
-          Text('After: ${afterCents.toStringAsFixed(1)}c (MIDI ${widget.event.afterMidi ?? '—'})'),
-          Text('Live replay: ${liveCents.toStringAsFixed(1)}c • Δ ${delta >= 0 ? '+' : ''}${delta.toStringAsFixed(1)}c'),
+          if (!hasData)
+            const Text('Incomplete replay data', style: TextStyle(color: Colors.red))
+          else ...[
+            Text('Before: ${beforeCents.toStringAsFixed(1)}c (MIDI ${widget.event.beforeMidi ?? '—'})'),
+            Text('After: ${afterCents.toStringAsFixed(1)}c (MIDI ${widget.event.afterMidi ?? '—'})'),
+            Text('Live replay: ${liveCents!.toStringAsFixed(1)}c • Δ ${delta! >= 0 ? '+' : ''}${delta.toStringAsFixed(1)}c'),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [
               FilledButton.icon(
-                onPressed: _play,
+                onPressed: hasData ? _play : null,
                 icon: const Icon(Icons.play_arrow),
                 label: const Text('Play replay'),
               ),
@@ -1244,7 +1249,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
             afterMidi: driftEvent.after.nearestMidi,
             afterCents: driftEvent.after.centsError,
             afterFreqHz: driftEvent.after.freqHz,
-            audioSnippetUri: 'session-${_sessionStartMs ?? confirmedAtMs}-drift-${_driftCount}.pcm',
+            audioSnippetUri: 'session-${_sessionStartMs ?? confirmedAtMs}-drift-${_driftCount - 1}.pcm',
           ),
         );
       }
