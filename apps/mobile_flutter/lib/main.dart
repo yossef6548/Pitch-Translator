@@ -252,7 +252,37 @@ class _AppShellState extends State<AppShell> {
     final screens = [
       HomeTodayScreen(
           onStartFocus: () => _openFocusFromHome(context),
-          onOpenTrain: () => setState(() => _index = 1)),
+          onOpenTrain: () => setState(() => _index = 1),
+          onOpenQuickMonitor: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => LivePitchScreen(
+                  exercise: ExerciseCatalog.byId('PF_1'),
+                  level: LevelId.l1,
+                  config: const ExerciseConfig(
+                    toleranceCents: 35,
+                    driftThresholdCents: PtConstants.defaultDriftThresholdCents,
+                    driftAwarenessMode: false,
+                    countdownMs: PtConstants.defaultCountdownMs,
+                    randomizeTargetWithinRange: false,
+                    referenceToneEnabled: true,
+                    showNumericOverlay: true,
+                    shapeWarpingEnabled: true,
+                    colorFloodEnabled: true,
+                    hapticsEnabled: true,
+                    targetNote: 'A',
+                    targetOctave: 4,
+                    randomizeMinNote: 'C',
+                    randomizeMinOctave: 3,
+                    randomizeMaxNote: 'B',
+                    randomizeMaxOctave: 5,
+                    referenceTimbre: 'Pure Sine',
+                    referenceVolume: 0.8,
+                  ),
+                ),
+              ),
+            );
+          }),
       const TrainCatalogScreen(),
       const AnalyzeOverviewScreen(),
       const LibraryScreen(),
@@ -277,10 +307,16 @@ class _AppShellState extends State<AppShell> {
 }
 
 class HomeTodayScreen extends StatelessWidget {
-  const HomeTodayScreen({super.key, required this.onStartFocus, required this.onOpenTrain});
+  const HomeTodayScreen({
+    super.key,
+    required this.onStartFocus,
+    required this.onOpenTrain,
+    required this.onOpenQuickMonitor,
+  });
 
   final VoidCallback onStartFocus;
   final VoidCallback onOpenTrain;
+  final VoidCallback onOpenQuickMonitor;
 
   @override
   Widget build(BuildContext context) {
@@ -299,21 +335,81 @@ class HomeTodayScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Card(
-            child: StreamBuilder<DspFrame>(
-              stream: NativeAudioBridge().frames(),
-              builder: (context, snapshot) {
-                final frame = snapshot.data;
-                final cents = frame?.centsError;
-                final midi = frame?.nearestMidi;
-                return ListTile(
-                  title: const Text('Quick Monitor'),
-                  subtitle: Text(
-                    frame == null
-                        ? 'Warming up mic preview...'
-                        : 'Note: ${midi ?? '—'} • Deviation: ${cents == null ? '—' : '${cents.round()}c'}',
-                  ),
-                );
-              },
+            child: InkWell(
+              onTap: onOpenQuickMonitor,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: StreamBuilder<DspFrame>(
+                  stream: NativeAudioBridge().frames(),
+                  builder: (context, snapshot) {
+                    final frame = snapshot.data;
+                    final noteLabel = _midiToNoteLabel(frame?.nearestMidi);
+                    final haloColor = _pitchClassColor(frame?.nearestMidi);
+                    final markerAlignment = ((frame?.centsError ?? 0) / 50).clamp(-1.0, 1.0).toDouble();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Quick Monitor', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 4),
+                        Text(
+                          frame == null ? 'Warming up mic preview…' : 'Current note: $noteLabel',
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: haloColor,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: haloColor.withOpacity(0.65),
+                                    blurRadius: 8,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: SizedBox(
+                                height: 20,
+                                child: Stack(
+                                  children: [
+                                    Align(
+                                      alignment: Alignment.center,
+                                      child: Container(height: 2, color: Colors.white24),
+                                    ),
+                                    Align(
+                                      alignment: Alignment.center,
+                                      child: Container(width: 2, height: 14, color: Colors.white70),
+                                    ),
+                                    Align(
+                                      alignment: Alignment(markerAlignment, 0),
+                                      child: Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: haloColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        const Text('Tap to open LIVE_PITCH', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                      ],
+                    );
+                  },
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -1602,4 +1698,21 @@ class _PitchShape extends StatelessWidget {
 int _noteToMidi(String note, int octave) {
   final index = _notes.indexOf(note);
   return (octave + 1) * 12 + (index < 0 ? 9 : index);
+}
+
+String _midiToNoteLabel(int? midi) {
+  if (midi == null) {
+    return '—';
+  }
+  final note = _notes[midi % 12];
+  final octave = (midi ~/ 12) - 1;
+  return '$note$octave';
+}
+
+Color _pitchClassColor(int? midi) {
+  if (midi == null) {
+    return Colors.blueGrey;
+  }
+  final hues = [220.0, 205.0, 190.0, 170.0, 145.0, 95.0, 62.0, 40.0, 24.0, 0.0, 320.0, 275.0];
+  return HSVColor.fromAHSV(1, hues[midi % 12], 0.72, 0.95).toColor();
 }

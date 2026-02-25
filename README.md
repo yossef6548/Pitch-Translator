@@ -158,7 +158,6 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 **Still required**
 - Add native audio capture pipeline to persist real mic snippet files for replay (current snippet URI is metadata-only scaffold)
 - Apply full design token system (typography scale, spacing roles, motion curves, accessibility palettes)
-- Implement complete quick-monitor passive mic preview widget on HOME_TODAY card
 
 ### 3) Persistence and analytics
 
@@ -223,6 +222,15 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 ---
 
 ## New implementation details (this iteration)
+
+### Home quick monitor completion (this iteration)
+
+- `apps/mobile_flutter/lib/main.dart`
+  - Upgraded `HOME_TODAY` quick monitor card into an interactive `QUICK_MONITOR` preview aligned with `specs/ui-ux.md`:
+    - now shows current note label (e.g., `A4`)
+    - renders a pitch-class color halo indicator
+    - renders a no-number cents deviation bar with center anchor and live marker
+  - Added tap interaction that opens `LIVE_PITCH` directly using a deterministic warm-up configuration (`PF_1`, `L1`) so users can jump from passive monitoring into active training in one gesture.
 
 ### Advanced analytics completion (this iteration)
 
@@ -314,7 +322,7 @@ This repository is a monorepo containing Flutter UI/state logic, shared contract
 - Added `apps/mobile_flutter/test/root_flow_onboarding_test.dart` widget tests covering persisted onboarding skip and first-run completion persistence behavior.
 - Added failure-path widget coverage proving `RootFlow` exits loading state and shows onboarding when `SharedPreferences` read fails.
 - Flutter SDK/Dart CLI was not available in this container during this pass, so Flutter tests could not be re-run here.
-- Screenshot capture for updated replay UI could not be produced in this environment because Flutter runtime/tooling is unavailable, so the app could not be launched for browser-container capture.
+- Screenshot capture for the updated Home `QUICK_MONITOR` preview could not be produced in this environment because Flutter runtime/tooling is unavailable, so the app could not be launched for browser-container capture.
 - DSP smoke build commands remain runnable in this environment and were re-verified in this pass.
 
 ### Training engine drift replay capture
