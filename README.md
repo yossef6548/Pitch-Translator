@@ -21,7 +21,7 @@ This monorepo includes:
 - Flutter application in `apps/mobile_flutter`
 - Shared contracts/constants in `packages/pt_contracts`
 - DSP C++ module and smoke tests in `dsp`
-- Native bridge placeholders in `native/ios` and `native/android`
+- Native bridge scaffolding and implementation checklists in `native/ios` and `native/android`
 - Product/spec docs in `specs`
 - QA artifacts and traces in `qa`
 
@@ -41,6 +41,9 @@ This monorepo includes:
   - saturation
   - halo
 - Drift replay payload capture implemented via `DriftEvent(before, after)`.
+- Drift telemetry upgraded with deterministic counters/metrics:
+  - confirmed drift event count (`confirmedDriftCount`)
+  - average recovery time after drift confirmation (`averageRecoveryTimeMs`)
 
 ### App navigation and primary UI flows
 
@@ -72,43 +75,47 @@ This monorepo includes:
 - Assisted attempts tracked separately from mastery credit
 - Skill-decay refresh flags supported
 
+### Mode-level deterministic evaluators (new this pass)
+
+- Added deterministic evaluators to cover remaining QA specification domains:
+  - `RelativePitchEvaluator` for arithmetic pitch prompts (`RP_*`)
+  - `GroupSimulationEvaluator` for lock-ratio/drift/confusion analysis (`GS_*`)
+  - `ListeningTranslationEvaluator` for note+octave correctness (`LT_*`)
+- Evaluators are intentionally stateless/pure for deterministic replay and unit testability.
+
 ### QA + deterministic replay (expanded this pass)
 
 - Replay harness for DSP frame stream injection implemented
 - JSONL trace parser implemented
-- Replay harness now captures transition timeline metadata (`ReplayTransition`) for state-change assertions.
+- Replay harness captures transition timeline metadata (`ReplayTransition`) for state-change assertions.
 - Shared DSP frame test factory added to avoid duplicated test setup and improve consistency.
-- QA replay tests now cover:
-  - `QA-G-01` null-pitch low-confidence path
-  - `QA-G-02` confidence override lock-break
-  - `QA-PF-01` basic lock acquisition
-  - `QA-PF-02` lock near-miss
-  - `QA-DA-01` drift-candidate recovery
-  - `QA-DA-02` drift-confirmed trigger precondition
-  - `QA-VB-01` valid vibrato handling
-  - `QA-VB-02` excessive vibrato treated as error
-  - `QA-VD-01` cents→pixel mapping determinism
-  - `QA-VD-02` deformation max at threshold
-  - `QA-AN-01` average-error and stability metrics
-  - `QA-AN-02` drift-count accuracy
-  - `QA-PR-01` mode unlock gating
-  - `QA-PR-02` level unlock gating
-  - `QA-FM-01` pause/resume integrity (engine-level scope)
+- QA matrix/replay coverage now includes:
+  - `QA-G-01`, `QA-G-02`
+  - `QA-PF-01`, `QA-PF-02`, `QA-PF-03`
+  - `QA-DA-01`, `QA-DA-02`, `QA-DA-03`
+  - `QA-VB-01`, `QA-VB-02`
+  - `QA-RP-01`, `QA-RP-02`
+  - `QA-GS-01`, `QA-GS-02`
+  - `QA-LT-01`, `QA-LT-02`
+  - `QA-VD-01`, `QA-VD-02`
+  - `QA-AN-01`, `QA-AN-02`
+  - `QA-PR-01`, `QA-PR-02`
+  - `QA-FM-01`, `QA-FM-02` (engine-level route interruption simulation)
 
 ---
 
 ## 🚧 Remaining blockers before production release
 
-1. **Native real-time microphone capture pipeline**
-   - iOS AVAudioEngine measurement-mode path
-   - Android Oboe/AAudio callback path
+1. **Native real-time microphone capture pipeline completion**
+   - iOS AVAudioEngine measurement-mode path implementation
+   - Android Oboe/AAudio callback implementation
    - Real-time frame bridge parity with contract
-   - Verified mic→UI latency budget and session stability
+   - Verified mic→UI latency budget and session stability on physical devices
 
-2. **Full QA matrix completion from `specs/qa.md`**
-   - PF-03, DA-03, FM-02 scenarios
-   - RP/GS/LT mode-level deterministic evaluators and QA fixtures
-   - UI replay panel verification for drift-replay experience
+2. **Native integration QA and performance burn-in**
+   - Move FM-02 from engine simulation to device-level route-interruption harness
+   - Add end-to-end mic route-change and audio-focus-loss tests
+   - Add device-matrix latency profiling and long-session stability checks
 
 3. **Replay media integration for real snippets**
    - Current drift replay uses deterministic payload snapshots
@@ -129,21 +136,21 @@ This monorepo includes:
 | QA area | Status | Current state |
 | --- | --- | --- |
 | Global sanity | ✅ covered | G-01 and G-02 are covered in replay tests |
-| Pitch freezing | ⚠️ partial | PF-01 and PF-02 covered; PF-03 still pending |
-| Drift awareness | ⚠️ partial | DA-01 and DA-02 covered; DA-03 still pending |
+| Pitch freezing | ✅ covered | PF-01/PF-02/PF-03 covered in deterministic engine tests |
+| Drift awareness | ✅ covered | DA-01/DA-02/DA-03 covered including recovery-time assertion |
 | Vibrato | ✅ covered | VB-01 and VB-02 covered |
-| Relative/Group/Listening | ❌ pending | requires dedicated mode-level deterministic evaluators |
+| Relative/Group/Listening | ✅ covered | RP/GS/LT evaluators and QA matrix scenarios implemented |
 | Analytics | ✅ covered | AN-01 and AN-02 covered in QA matrix tests |
 | Progression/unlock | ✅ covered | PR-01 and PR-02 mapped directly to QA tests |
 | Visual determinism | ✅ covered | VD-01 and VD-02 covered |
-| Failure modes | ⚠️ partial | FM-01 covered at engine level; FM-02 pending native route tests |
+| Failure modes | ⚠️ partial | FM-01 and FM-02 covered at engine layer; native route harness still pending |
 
 ---
 
 ## Recommended next implementation order
 
 1. Native audio I/O bridge completion (iOS + Android)
-2. RP/GS/LT evaluator implementation + QA-ID fixtures
+2. Native integration/performance QA matrix execution
 3. Drift replay audio snippet capture/playback integration
 4. Design tokenization + accessibility closure
 5. DSP hardening/device validation
@@ -202,7 +209,7 @@ cmake --build /tmp/pt-dsp-build
 /tmp/pt-dsp-build/pt_dsp_tests
 ```
 
-> Note: Flutter/Dart CLI is not installed in this execution container, so Flutter tests must be run on a machine/CI runner with Flutter SDK available.
+> Note: Flutter/Dart CLI was unavailable in this execution container, so Flutter tests must be run on a machine/CI runner with Flutter SDK available.
 
 ---
 

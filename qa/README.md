@@ -8,32 +8,38 @@ This folder contains deterministic QA assets and guidance for validating `specs/
 - JSONL trace parser (`ReplayHarness.parseJsonl`) for reusable trace fixtures under `qa/traces`.
 - Transition timeline capture (`ReplayTransition`) so tests can assert exact state changes and timing windows, not only final state.
 - Shared DSP test-frame factory (`apps/mobile_flutter/test/support/dsp_frame_factory.dart`) to keep replay and engine tests consistent and maintainable.
-- Replay-style tests under `apps/mobile_flutter/test/qa/replay_harness_test.dart` for critical deterministic behavior:
+- Replay-style tests under `apps/mobile_flutter/test/qa/replay_harness_test.dart` for deterministic behavior:
   - low-confidence null-pitch handling (QA-G-01)
   - confidence override (QA-G-02)
   - drift-candidate recovery (QA-DA-01)
   - drift confirmation/replay trigger precondition (QA-DA-02)
   - vibrato acceptance/rejection paths (QA-VB-01 / QA-VB-02)
   - visual determinism scalars (QA-VD-01 / QA-VD-02)
-- QA matrix tests under `apps/mobile_flutter/test/qa/qa_matrix_test.dart` covering additional spec IDs:
-  - PF lock and near-miss behavior (QA-PF-01 / QA-PF-02)
+- QA matrix tests under `apps/mobile_flutter/test/qa/qa_matrix_test.dart` covering:
+  - PF lock/near-miss/silent-hold failure scenarios (QA-PF-01 / QA-PF-02 / QA-PF-03)
+  - DA recovery-time success criteria (QA-DA-03)
+  - RP arithmetic correctness/failure (QA-RP-01 / QA-RP-02)
+  - GS lock and confusion outcomes (QA-GS-01 / QA-GS-02)
+  - LT note and octave validation (QA-LT-01 / QA-LT-02)
   - analytics metric correctness (QA-AN-01 / QA-AN-02)
   - progression unlock gating (QA-PR-01 / QA-PR-02)
-  - lifecycle pause/resume integrity (QA-FM-01 partial)
+  - lifecycle and route interruption behavior (QA-FM-01 / QA-FM-02 at engine-level)
 
 ## Coverage status vs `specs/qa.md`
 
 | Section | Status | Notes |
 | --- | --- | --- |
 | Global sanity (`QA-G-*`) | ✅ covered | G-01/G-02 implemented in replay tests. |
-| Pitch Freezing (`QA-PF-*`) | ⚠️ partial | PF-01/PF-02 covered; PF-03 silent-hold failure remains pending. |
-| Drift Awareness (`QA-DA-*`) | ⚠️ partial | DA-01/DA-02 covered; DA-03 recovery timing remains pending. |
+| Pitch Freezing (`QA-PF-*`) | ✅ covered | PF-01/PF-02/PF-03 validated deterministically. |
+| Drift Awareness (`QA-DA-*`) | ✅ covered | DA-01/DA-02/DA-03 covered including recovery timing. |
 | Vibrato (`QA-VB-*`) | ✅ covered | VB-01/VB-02 deterministic behavior covered. |
-| Relative Pitch / Group / Listening | ❌ pending | Requires dedicated RP/GS/LT runtime evaluators and fixtures. |
-| Analytics validation (`QA-AN-*`) | ✅ covered | AN-01/AN-02 now validated by deterministic unit tests. |
+| Relative Pitch (`QA-RP-*`) | ✅ covered | RP evaluator + QA matrix cases in place. |
+| Group Simulation (`QA-GS-*`) | ✅ covered | Deterministic lock/confusion evaluator tests in place. |
+| Listening & Translation (`QA-LT-*`) | ✅ covered | Deterministic note+octave evaluator tests in place. |
+| Analytics validation (`QA-AN-*`) | ✅ covered | AN-01/AN-02 validated by deterministic unit tests. |
 | Progression/unlock (`QA-PR-*`) | ✅ covered | PR-01/PR-02 mapped explicitly in QA matrix tests. |
 | Visual determinism (`QA-VD-*`) | ✅ covered | Pixel mapping and deformation max assertions implemented. |
-| Failure modes (`QA-FM-*`) | ⚠️ partial | FM-01 pause/resume path covered in engine scope; FM-02 audio-route integration pending native harness. |
+| Failure modes (`QA-FM-*`) | ⚠️ partial | FM-01/FM-02 covered in engine domain; native route harness remains pending. |
 
 ## How to run QA checks
 
