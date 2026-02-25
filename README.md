@@ -61,7 +61,7 @@ This monorepo includes:
   - timbre and reference volume controls
 - LIVE_PITCH integration with selected exercise config
 - Native audio bridge upgraded to prefer platform `EventChannel`/`MethodChannel` transport (`pt/audio/frames`, `pt/audio/control`) with deterministic simulator fallback in plugin-missing/dev environments
-- Drift replay modal/sheet flow scaffolding from confirmed drifts
+- Drift replay modal/sheet flow now loads persisted snippet frames, supports frame-aware replay telemetry, and is accessible from both Session Detail and Library surfaces
 - Home quick monitor card upgraded to interactive launch into warm-up exercise
 
 ### Persistence and analytics
@@ -91,6 +91,10 @@ This monorepo includes:
 ### QA + deterministic replay (expanded this pass)
 
 - Replay harness for DSP frame stream injection implemented
+- Flutter toolchain bootstrapped in-container for ongoing work:
+  - Flutter `3.41.2` (stable)
+  - Dart `3.11.0`
+  - global commands available via `/usr/local/bin/flutter` and `/usr/local/bin/dart`
 - JSONL trace parser implemented
 - Replay harness captures transition timeline metadata (`ReplayTransition`) for state-change assertions.
 - Shared DSP frame test factory added to avoid duplicated test setup and improve consistency.
@@ -122,15 +126,11 @@ This monorepo includes:
    - Add end-to-end mic route-change and audio-focus-loss tests
    - Add device-matrix latency profiling and long-session stability checks
 
-3. **Replay media playback integration for persisted snippets**
-   - ✅ Snippet capture + persistence path implemented (JSON frame snippets)
-   - UI playback controls for these persisted snippets are still pending
-
-4. **Design-system completion and accessibility tuning**
+3. **Design-system completion and accessibility tuning**
    - Full tokenization sweep (spacing/typography/motion/color)
    - Accessibility audits and contrast checks across all surfaces
 
-5. **DSP hardening for noisy production environments**
+4. **DSP hardening for noisy production environments**
    - Improved voicing/pitch tracker robustness
    - Device-level calibration and false-drift suppression validation
 
@@ -149,7 +149,7 @@ This monorepo includes:
 | Progression/unlock | ✅ covered | PR-01 and PR-02 mapped directly to QA tests |
 | Visual determinism | ✅ covered | VD-01 and VD-02 covered |
 | Failure modes | ⚠️ partial | FM-01 and FM-02 covered at engine layer; Flutter channel fallback path covered, but native route harness is still pending |
-| Drift snippet persistence | ✅ covered | Drift confirmation now persists rolling JSON snippets and stores URI in analytics DB |
+| Drift snippet persistence | ✅ covered | Drift confirmation persists rolling JSON snippets, and replay controls can load these snippets from Session Detail and Library views |
 
 ---
 
@@ -157,10 +157,9 @@ This monorepo includes:
 
 1. Native iOS/Android audio callback implementations behind the now-defined Flutter channel contract
 2. Native integration/performance QA matrix execution on physical device matrix
-3. Drift replay snippet playback controls in `DRIFT_REPLAY` and Library surfaces
-4. Design tokenization + accessibility closure
-5. DSP hardening/device validation
-6. Production burn-in and release checklist completion
+3. Design tokenization + accessibility closure
+4. DSP hardening/device validation
+5. Production burn-in and release checklist completion
 
 ---
 
@@ -215,7 +214,7 @@ cmake --build /tmp/pt-dsp-build
 /tmp/pt-dsp-build/pt_dsp_tests
 ```
 
-> Note: Flutter/Dart CLI was unavailable in this execution container (`flutter` and `dart` commands not found under expected PATHs and `/tmp`), so Flutter tests must be run on a machine/CI runner with Flutter SDK available.
+> Environment note: Flutter SDK is installed in this container at `/opt/flutter`, with persistent symlinks in `/usr/local/bin/flutter` and `/usr/local/bin/dart` for future tasks.
 
 ---
 

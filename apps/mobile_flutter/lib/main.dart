@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,7 +13,20 @@ import 'exercises/exercise_catalog.dart';
 import 'qa/drift_snippet_recorder.dart';
 import 'training/training_engine.dart';
 
-const _notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const _notes = [
+  'C',
+  'C#',
+  'D',
+  'D#',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'G#',
+  'A',
+  'A#',
+  'B',
+];
 const _referenceTimbres = ['Pure Sine', 'Soft Piano', 'Warm Pad', 'Bright Saw'];
 
 void main() {
@@ -89,9 +104,7 @@ class _RootFlowState extends State<RootFlow> {
     if (_completedOnboarding) {
       return const AppShell();
     }
-    return OnboardingCalibrationScreen(
-      onComplete: _completeOnboarding,
-    );
+    return OnboardingCalibrationScreen(onComplete: _completeOnboarding);
   }
 }
 
@@ -101,10 +114,12 @@ class OnboardingCalibrationScreen extends StatefulWidget {
   final VoidCallback onComplete;
 
   @override
-  State<OnboardingCalibrationScreen> createState() => _OnboardingCalibrationScreenState();
+  State<OnboardingCalibrationScreen> createState() =>
+      _OnboardingCalibrationScreenState();
 }
 
-class _OnboardingCalibrationScreenState extends State<OnboardingCalibrationScreen> {
+class _OnboardingCalibrationScreenState
+    extends State<OnboardingCalibrationScreen> {
   final _controller = PageController();
   int _index = 0;
   bool _micReady = false;
@@ -144,19 +159,33 @@ class _OnboardingCalibrationScreenState extends State<OnboardingCalibrationScree
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Audio calibration', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                      const Text(
+                        'Audio calibration',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       CheckboxListTile(
                         value: _micReady,
-                        onChanged: (v) => setState(() => _micReady = v ?? false),
+                        onChanged: (v) =>
+                            setState(() => _micReady = v ?? false),
                         title: const Text('Microphone permission granted'),
-                        subtitle: const Text('Required for HOME_TODAY quick monitor and LIVE_PITCH.'),
+                        subtitle: const Text(
+                          'Required for HOME_TODAY quick monitor and LIVE_PITCH.',
+                        ),
                       ),
                       CheckboxListTile(
                         value: _headphonesReady,
-                        onChanged: (v) => setState(() => _headphonesReady = v ?? false),
-                        title: const Text('Headphones connected for reference playback'),
-                        subtitle: const Text('Reduces false drift in noisy rooms.'),
+                        onChanged: (v) =>
+                            setState(() => _headphonesReady = v ?? false),
+                        title: const Text(
+                          'Headphones connected for reference playback',
+                        ),
+                        subtitle: const Text(
+                          'Reduces false drift in noisy rooms.',
+                        ),
                       ),
                     ],
                   ),
@@ -172,7 +201,10 @@ class _OnboardingCalibrationScreenState extends State<OnboardingCalibrationScree
                   TextButton(
                     onPressed: () {
                       setState(() => _index -= 1);
-                      _controller.previousPage(duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+                      _controller.previousPage(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOut,
+                      );
                     },
                     child: const Text('Back'),
                   ),
@@ -182,7 +214,10 @@ class _OnboardingCalibrationScreenState extends State<OnboardingCalibrationScree
                       ? () {
                           if (_index < 2) {
                             setState(() => _index += 1);
-                            _controller.nextPage(duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+                            _controller.nextPage(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOut,
+                            );
                           } else {
                             widget.onComplete();
                           }
@@ -212,7 +247,10 @@ class _OnboardingPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
           for (final bullet in bullets)
             ListTile(
@@ -252,23 +290,24 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final screens = [
       HomeTodayScreen(
-          onStartFocus: () => _openFocusFromHome(context),
-          onOpenTrain: () => setState(() => _index = 1),
-          onOpenQuickMonitor: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => LivePitchScreen(
-                  exercise: ExerciseCatalog.byId('PF_1'),
-                  level: LevelId.l1,
-                  config: const ExerciseConfig(
-                    referenceToneEnabled: false,
-                    toleranceCents: 20.0,
-                    driftThresholdCents: 30.0,
-                  ),
+        onStartFocus: () => _openFocusFromHome(context),
+        onOpenTrain: () => setState(() => _index = 1),
+        onOpenQuickMonitor: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => LivePitchScreen(
+                exercise: ExerciseCatalog.byId('PF_1'),
+                level: LevelId.l1,
+                config: const ExerciseConfig(
+                  referenceToneEnabled: false,
+                  toleranceCents: 20.0,
+                  driftThresholdCents: 30.0,
                 ),
               ),
-            );
-          }),
+            ),
+          );
+        },
+      ),
       const TrainCatalogScreen(),
       const AnalyzeOverviewScreen(),
       const LibraryScreen(),
@@ -281,11 +320,31 @@ class _AppShellState extends State<AppShell> {
         selectedIndex: _index,
         onDestinationSelected: (next) => setState(() => _index = next),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.fitness_center_outlined), selectedIcon: Icon(Icons.fitness_center), label: 'Train'),
-          NavigationDestination(icon: Icon(Icons.analytics_outlined), selectedIcon: Icon(Icons.analytics), label: 'Analyze'),
-          NavigationDestination(icon: Icon(Icons.library_music_outlined), selectedIcon: Icon(Icons.library_music), label: 'Library'),
-          NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.fitness_center_outlined),
+            selectedIcon: Icon(Icons.fitness_center),
+            label: 'Train',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.analytics_outlined),
+            selectedIcon: Icon(Icons.analytics),
+            label: 'Analyze',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.library_music_outlined),
+            selectedIcon: Icon(Icons.library_music),
+            label: 'Library',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
         ],
       ),
     );
@@ -316,7 +375,10 @@ class HomeTodayScreen extends StatelessWidget {
             child: ListTile(
               title: const Text('Today Focus: Drift Recovery'),
               subtitle: const Text('Goal: Hold A4 with ≤ ±20c for 8 seconds.'),
-              trailing: FilledButton(onPressed: onStartFocus, child: const Text('Start')),
+              trailing: FilledButton(
+                onPressed: onStartFocus,
+                child: const Text('Start'),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -331,14 +393,22 @@ class HomeTodayScreen extends StatelessWidget {
                     final frame = snapshot.data;
                     final noteLabel = _midiToNoteLabel(frame?.nearestMidi);
                     final haloColor = _pitchClassColor(frame?.nearestMidi);
-                    final markerAlignment = ((frame?.centsError ?? 0) / PtConstants.centsErrorClamp).clamp(-1.0, 1.0).toDouble();
+                    final markerAlignment =
+                        ((frame?.centsError ?? 0) / PtConstants.centsErrorClamp)
+                            .clamp(-1.0, 1.0)
+                            .toDouble();
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Quick Monitor', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Text(
+                          'Quick Monitor',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         const SizedBox(height: 4),
                         Text(
-                          frame == null ? 'Warming up mic preview…' : 'Current note: $noteLabel',
+                          frame == null
+                              ? 'Warming up mic preview…'
+                              : 'Current note: $noteLabel',
                         ),
                         const SizedBox(height: 10),
                         Row(
@@ -366,11 +436,18 @@ class HomeTodayScreen extends StatelessWidget {
                                   children: [
                                     Align(
                                       alignment: Alignment.center,
-                                      child: Container(height: 2, color: Colors.white24),
+                                      child: Container(
+                                        height: 2,
+                                        color: Colors.white24,
+                                      ),
                                     ),
                                     Align(
                                       alignment: Alignment.center,
-                                      child: Container(width: 2, height: 14, color: Colors.white70),
+                                      child: Container(
+                                        width: 2,
+                                        height: 14,
+                                        color: Colors.white70,
+                                      ),
                                     ),
                                     Align(
                                       alignment: Alignment(markerAlignment, 0),
@@ -390,7 +467,10 @@ class HomeTodayScreen extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 6),
-                        const Text('Tap to open LIVE_PITCH', style: TextStyle(fontSize: 12, color: Colors.white70)),
+                        const Text(
+                          'Tap to open LIVE_PITCH',
+                          style: TextStyle(fontSize: 12, color: Colors.white70),
+                        ),
                       ],
                     );
                   },
@@ -436,7 +516,11 @@ class HomeTodayScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          FilledButton.icon(onPressed: onOpenTrain, icon: const Icon(Icons.fitness_center), label: const Text('Go to TRAIN_CATALOG')),
+          FilledButton.icon(
+            onPressed: onOpenTrain,
+            icon: const Icon(Icons.fitness_center),
+            label: const Text('Go to TRAIN_CATALOG'),
+          ),
         ],
       ),
     );
@@ -457,20 +541,30 @@ class TrainCatalogScreen extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('TRAIN_CATALOG', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const Text(
+            'TRAIN_CATALOG',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
           for (final mode in ExerciseCatalog.modeOrder)
             Card(
               child: ExpansionTile(
                 title: Text(_modeLabel(mode)),
-                subtitle: Text('${grouped[mode]?.length ?? 0} exercises • Mastery 44%'),
+                subtitle: Text(
+                  '${grouped[mode]?.length ?? 0} exercises • Mastery 44%',
+                ),
                 children: [
-                  for (final exercise in grouped[mode] ?? const <ExerciseDefinition>[])
+                  for (final exercise
+                      in grouped[mode] ?? const <ExerciseDefinition>[])
                     ListTile(
                       title: Text('${exercise.id}: ${exercise.name}'),
                       trailing: FilledButton(
                         onPressed: () {
-                          Navigator.of(context).push(MaterialPageRoute(builder: (_) => ModeOverviewScreen(mode: mode)));
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ModeOverviewScreen(mode: mode),
+                            ),
+                          );
                         },
                         child: const Text('Open'),
                       ),
@@ -506,29 +600,55 @@ class ModeOverviewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final exercises = ExerciseCatalog.all.where((e) => e.mode == mode).toList(growable: false);
+    final exercises = ExerciseCatalog.all
+        .where((e) => e.mode == mode)
+        .toList(growable: false);
     return Scaffold(
       appBar: AppBar(title: Text('MODE_${mode.name.toUpperCase()}_OVERVIEW')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(_modeTitle(mode), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          Text(
+            _modeTitle(mode),
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           Text(_modeDescription(mode)),
           const SizedBox(height: 12),
-          const Text('What you train here', style: TextStyle(fontWeight: FontWeight.bold)),
-          for (final bullet in _modeBullets(mode)) ListTile(leading: const Icon(Icons.check_circle_outline), title: Text(bullet)),
+          const Text(
+            'What you train here',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          for (final bullet in _modeBullets(mode))
+            ListTile(
+              leading: const Icon(Icons.check_circle_outline),
+              title: Text(bullet),
+            ),
           const Divider(),
-          const Text('Exercises', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'Exercises',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           for (final exercise in exercises)
             Card(
               child: ListTile(
                 title: Text('${exercise.id}: ${exercise.name}'),
-                subtitle: Text(exercise.driftAwarenessMode ? 'Drift replay enabled' : 'Standard tracking'),
+                subtitle: Text(
+                  exercise.driftAwarenessMode
+                      ? 'Drift replay enabled'
+                      : 'Standard tracking',
+                ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => ExerciseConfigScreen(exercise: exercise, initialLevel: LevelId.l2)));
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ExerciseConfigScreen(
+                        exercise: exercise,
+                        initialLevel: LevelId.l2,
+                      ),
+                    ),
+                  );
                 },
               ),
             ),
@@ -539,7 +659,11 @@ class ModeOverviewScreen extends StatelessWidget {
 }
 
 class ExerciseConfigScreen extends StatefulWidget {
-  const ExerciseConfigScreen({super.key, required this.exercise, required this.initialLevel});
+  const ExerciseConfigScreen({
+    super.key,
+    required this.exercise,
+    required this.initialLevel,
+  });
 
   final ExerciseDefinition exercise;
   final LevelId initialLevel;
@@ -587,41 +711,51 @@ class _ExerciseConfigScreenState extends State<ExerciseConfigScreen> {
     await showModalBottomSheet<void>(
       context: context,
       builder: (context) {
-        return StatefulBuilder(builder: (context, setModalState) {
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Select target', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                DropdownButton<String>(
-                  value: tempNote,
-                  items: [for (final note in _notes) DropdownMenuItem(value: note, child: Text(note))],
-                  onChanged: (value) => setModalState(() => tempNote = value!),
-                ),
-                Slider(
-                  min: 2,
-                  max: 6,
-                  divisions: 4,
-                  label: 'Octave $tempOctave',
-                  value: tempOctave.toDouble(),
-                  onChanged: (v) => setModalState(() => tempOctave = v.round()),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    setState(() {
-                      _targetNote = tempNote;
-                      _targetOctave = tempOctave;
-                    });
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Confirm target'),
-                ),
-              ],
-            ),
-          );
-        });
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Select target',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButton<String>(
+                    value: tempNote,
+                    items: [
+                      for (final note in _notes)
+                        DropdownMenuItem(value: note, child: Text(note)),
+                    ],
+                    onChanged: (value) =>
+                        setModalState(() => tempNote = value!),
+                  ),
+                  Slider(
+                    min: 2,
+                    max: 6,
+                    divisions: 4,
+                    label: 'Octave $tempOctave',
+                    value: tempOctave.toDouble(),
+                    onChanged: (v) =>
+                        setModalState(() => tempOctave = v.round()),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      setState(() {
+                        _targetNote = tempNote;
+                        _targetOctave = tempOctave;
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: const Text('Confirm target'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
       },
     );
   }
@@ -646,7 +780,10 @@ class _ExerciseConfigScreenState extends State<ExerciseConfigScreen> {
             onChanged: (value) => setState(() => _randomizeTarget = value),
           ),
           if (_randomizeTarget)
-            Text('Range: $_rangeMinNote$_rangeMinOctave → $_rangeMaxNote$_rangeMaxOctave', style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Range: $_rangeMinNote$_rangeMinOctave → $_rangeMaxNote$_rangeMaxOctave',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           if (_randomizeTarget)
             Row(
               children: [
@@ -654,22 +791,33 @@ class _ExerciseConfigScreenState extends State<ExerciseConfigScreen> {
                   child: DropdownButton<String>(
                     value: _rangeMinNote,
                     isExpanded: true,
-                    items: [for (final note in _notes) DropdownMenuItem(value: note, child: Text('Min $note'))],
-                    onChanged: (value) => setState(() => _rangeMinNote = value!),
+                    items: [
+                      for (final note in _notes)
+                        DropdownMenuItem(value: note, child: Text('Min $note')),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _rangeMinNote = value!),
                   ),
                 ),
                 Expanded(
                   child: DropdownButton<String>(
                     value: _rangeMaxNote,
                     isExpanded: true,
-                    items: [for (final note in _notes) DropdownMenuItem(value: note, child: Text('Max $note'))],
-                    onChanged: (value) => setState(() => _rangeMaxNote = value!),
+                    items: [
+                      for (final note in _notes)
+                        DropdownMenuItem(value: note, child: Text('Max $note')),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _rangeMaxNote = value!),
                   ),
                 ),
               ],
             ),
           const SizedBox(height: 12),
-          const Text('Difficulty Level', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text(
+            'Difficulty Level',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           SegmentedButton<LevelId>(
             segments: const [
               ButtonSegment(value: LevelId.l1, label: Text('L1')),
@@ -685,13 +833,28 @@ class _ExerciseConfigScreenState extends State<ExerciseConfigScreen> {
             },
           ),
           const SizedBox(height: 12),
-          const Text('Tolerance', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text(
+            'Tolerance',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           Wrap(
             spacing: 8,
             children: [
-              ChoiceChip(label: const Text('Lenient ±35c'), selected: _tolerance == 35, onSelected: (_) => setState(() => _tolerance = 35)),
-              ChoiceChip(label: const Text('Standard ±20c'), selected: _tolerance == 20, onSelected: (_) => setState(() => _tolerance = 20)),
-              ChoiceChip(label: const Text('Strict ±10c'), selected: _tolerance == 10, onSelected: (_) => setState(() => _tolerance = 10)),
+              ChoiceChip(
+                label: const Text('Lenient ±35c'),
+                selected: _tolerance == 35,
+                onSelected: (_) => setState(() => _tolerance = 35),
+              ),
+              ChoiceChip(
+                label: const Text('Standard ±20c'),
+                selected: _tolerance == 20,
+                onSelected: (_) => setState(() => _tolerance = 20),
+              ),
+              ChoiceChip(
+                label: const Text('Strict ±10c'),
+                selected: _tolerance == 10,
+                onSelected: (_) => setState(() => _tolerance = 10),
+              ),
             ],
           ),
           SwitchListTile(
@@ -709,7 +872,10 @@ class _ExerciseConfigScreenState extends State<ExerciseConfigScreen> {
               onChanged: (value) => setState(() => _tolerance = value),
             ),
           const SizedBox(height: 12),
-          const Text('Reference', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text(
+            'Reference',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           SwitchListTile(
             title: const Text('Reference tone'),
             value: _referenceOn,
@@ -718,8 +884,13 @@ class _ExerciseConfigScreenState extends State<ExerciseConfigScreen> {
           DropdownButtonFormField<String>(
             value: _referenceTimbre,
             decoration: const InputDecoration(labelText: 'Timbre selector'),
-            items: [for (final timbre in _referenceTimbres) DropdownMenuItem(value: timbre, child: Text(timbre))],
-            onChanged: _referenceOn ? (value) => setState(() => _referenceTimbre = value!) : null,
+            items: [
+              for (final timbre in _referenceTimbres)
+                DropdownMenuItem(value: timbre, child: Text(timbre)),
+            ],
+            onChanged: _referenceOn
+                ? (value) => setState(() => _referenceTimbre = value!)
+                : null,
           ),
           Slider(
             min: 0,
@@ -727,14 +898,32 @@ class _ExerciseConfigScreenState extends State<ExerciseConfigScreen> {
             divisions: 10,
             label: '${(_referenceVolume * 100).round()}%',
             value: _referenceVolume,
-            onChanged: _referenceOn ? (v) => setState(() => _referenceVolume = v) : null,
+            onChanged: _referenceOn
+                ? (v) => setState(() => _referenceVolume = v)
+                : null,
           ),
           const SizedBox(height: 12),
           const Text('Feedback', style: TextStyle(fontWeight: FontWeight.bold)),
-          SwitchListTile(title: const Text('Numeric overlay'), value: _showNumeric, onChanged: (value) => setState(() => _showNumeric = value)),
-          SwitchListTile(title: const Text('Shape warping'), value: _shapeWarping, onChanged: (value) => setState(() => _shapeWarping = value)),
-          SwitchListTile(title: const Text('Color flood'), value: _colorFlood, onChanged: (value) => setState(() => _colorFlood = value)),
-          SwitchListTile(title: const Text('Haptics'), value: _haptics, onChanged: (value) => setState(() => _haptics = value)),
+          SwitchListTile(
+            title: const Text('Numeric overlay'),
+            value: _showNumeric,
+            onChanged: (value) => setState(() => _showNumeric = value),
+          ),
+          SwitchListTile(
+            title: const Text('Shape warping'),
+            value: _shapeWarping,
+            onChanged: (value) => setState(() => _shapeWarping = value),
+          ),
+          SwitchListTile(
+            title: const Text('Color flood'),
+            value: _colorFlood,
+            onChanged: (value) => setState(() => _colorFlood = value),
+          ),
+          SwitchListTile(
+            title: const Text('Haptics'),
+            value: _haptics,
+            onChanged: (value) => setState(() => _haptics = value),
+          ),
           const SizedBox(height: 12),
           FilledButton(
             onPressed: () {
@@ -792,7 +981,13 @@ class AnalyzeOverviewScreen extends StatelessWidget {
       child: SafeArea(
         child: Column(
           children: [
-            const TabBar(tabs: [Tab(text: 'Sessions'), Tab(text: 'Trends'), Tab(text: 'Weakness Map')]),
+            const TabBar(
+              tabs: [
+                Tab(text: 'Sessions'),
+                Tab(text: 'Trends'),
+                Tab(text: 'Weakness Map'),
+              ],
+            ),
             Expanded(
               child: TabBarView(
                 children: [
@@ -801,17 +996,28 @@ class AnalyzeOverviewScreen extends StatelessWidget {
                     builder: (context, snapshot) {
                       final sessions = snapshot.data ?? const <SessionRecord>[];
                       if (sessions.isEmpty) {
-                        return const Center(child: Text('No sessions yet. Complete a LIVE_PITCH run to populate analytics.'));
+                        return const Center(
+                          child: Text(
+                            'No sessions yet. Complete a LIVE_PITCH run to populate analytics.',
+                          ),
+                        );
                       }
                       return ListView(
                         children: [
                           for (final s in sessions)
                             ListTile(
-                              title: Text('${s.modeLabel} • ${_formatDuration(s.durationMs)}'),
-                              subtitle: Text('Avg Error ${s.avgErrorCents.toStringAsFixed(1)}c • Drift ${s.driftCount}'),
+                              title: Text(
+                                '${s.modeLabel} • ${_formatDuration(s.durationMs)}',
+                              ),
+                              subtitle: Text(
+                                'Avg Error ${s.avgErrorCents.toStringAsFixed(1)}c • Drift ${s.driftCount}',
+                              ),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => SessionDetailScreen(sessionId: s.id)),
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      SessionDetailScreen(sessionId: s.id),
+                                ),
                               ),
                             ),
                         ],
@@ -830,59 +1036,116 @@ class AnalyzeOverviewScreen extends StatelessWidget {
                             padding: const EdgeInsets.all(16),
                             children: [
                               ListTile(
-                                title: const Text('Avg error trend (recent sessions)'),
-                                subtitle: Text('${trend?.avgErrorCents.toStringAsFixed(1) ?? '—'}c'),
+                                title: const Text(
+                                  'Avg error trend (recent sessions)',
+                                ),
+                                subtitle: Text(
+                                  '${trend?.avgErrorCents.toStringAsFixed(1) ?? '—'}c',
+                                ),
                               ),
-                              SizedBox(height: 96, child: _TrendSparkline(series: series, selector: (p) => p.avgErrorCents, color: Colors.orangeAccent)),
+                              SizedBox(
+                                height: 96,
+                                child: _TrendSparkline(
+                                  series: series,
+                                  selector: (p) => p.avgErrorCents,
+                                  color: Colors.orangeAccent,
+                                ),
+                              ),
                               const SizedBox(height: 12),
                               ListTile(
-                                title: const Text('Stability score trend (recent sessions)'),
-                                subtitle: Text(trend?.stabilityScore.toStringAsFixed(1) ?? '—'),
+                                title: const Text(
+                                  'Stability score trend (recent sessions)',
+                                ),
+                                subtitle: Text(
+                                  trend?.stabilityScore.toStringAsFixed(1) ??
+                                      '—',
+                                ),
                               ),
-                              SizedBox(height: 96, child: _TrendSparkline(series: series, selector: (p) => p.stabilityScore, color: Colors.lightGreenAccent)),
+                              SizedBox(
+                                height: 96,
+                                child: _TrendSparkline(
+                                  series: series,
+                                  selector: (p) => p.stabilityScore,
+                                  color: Colors.lightGreenAccent,
+                                ),
+                              ),
                               const SizedBox(height: 12),
                               ListTile(
-                                title: const Text('Drift trend (recent sessions)'),
-                                subtitle: Text(trend == null ? '—' : '${trend.driftPerSession.toStringAsFixed(2)} per session'),
+                                title: const Text(
+                                  'Drift trend (recent sessions)',
+                                ),
+                                subtitle: Text(
+                                  trend == null
+                                      ? '—'
+                                      : '${trend.driftPerSession.toStringAsFixed(2)} per session',
+                                ),
                               ),
-                              SizedBox(height: 96, child: _TrendSparkline(series: series, selector: (p) => p.driftCount.toDouble(), color: Colors.cyanAccent)),
+                              SizedBox(
+                                height: 96,
+                                child: _TrendSparkline(
+                                  series: series,
+                                  selector: (p) => p.driftCount.toDouble(),
+                                  color: Colors.cyanAccent,
+                                ),
+                              ),
                               const SizedBox(height: 12),
                               FutureBuilder<RetentionSnapshot>(
                                 future: retentionFuture,
                                 builder: (context, retentionSnapshot) {
                                   final retention = retentionSnapshot.data;
-                                  final mastered = retention?.masteredCount ?? 0;
-                                  final ratio7d = retention == null ? '—' : '${(retention.retained7DayRatio * 100).round()}%';
-                                  final ratio30d = retention == null ? '—' : '${(retention.retained30DayRatio * 100).round()}%';
+                                  final mastered =
+                                      retention?.masteredCount ?? 0;
+                                  final ratio7d = retention == null
+                                      ? '—'
+                                      : '${(retention.retained7DayRatio * 100).round()}%';
+                                  final ratio30d = retention == null
+                                      ? '—'
+                                      : '${(retention.retained30DayRatio * 100).round()}%';
                                   return ListTile(
                                     title: const Text('Longitudinal retention'),
-                                    subtitle: Text('Masteries: $mastered • 7d: $ratio7d • 30d: $ratio30d'),
+                                    subtitle: Text(
+                                      'Masteries: $mastered • 7d: $ratio7d • 30d: $ratio30d',
+                                    ),
                                   );
                                 },
                               ),
                               FutureBuilder<List<ModeLevelPercentile>>(
                                 future: percentilesFuture,
                                 builder: (context, percentileSnapshot) {
-                                  final percentiles = percentileSnapshot.data ?? const <ModeLevelPercentile>[];
+                                  final percentiles = percentileSnapshot.data ??
+                                      const <ModeLevelPercentile>[];
                                   if (percentiles.isEmpty) {
                                     return const ListTile(
-                                      title: Text('Mode/level error percentiles'),
-                                      subtitle: Text('No attempt distribution yet.'),
+                                      title: Text(
+                                        'Mode/level error percentiles',
+                                      ),
+                                      subtitle: Text(
+                                        'No attempt distribution yet.',
+                                      ),
                                     );
                                   }
                                   return Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const ListTile(
                                         contentPadding: EdgeInsets.zero,
-                                        title: Text('Mode/level error percentiles'),
-                                        subtitle: Text('Absolute cents error distribution by exercise mode and level.'),
+                                        title: Text(
+                                          'Mode/level error percentiles',
+                                        ),
+                                        subtitle: Text(
+                                          'Absolute cents error distribution by exercise mode and level.',
+                                        ),
                                       ),
                                       for (final row in percentiles)
                                         ListTile(
                                           dense: true,
-                                          title: Text('${row.mode} • ${row.level}'),
-                                          subtitle: Text('P50 ${row.p50ErrorCents.toStringAsFixed(1)}c • P90 ${row.p90ErrorCents.toStringAsFixed(1)}c'),
+                                          title: Text(
+                                            '${row.mode} • ${row.level}',
+                                          ),
+                                          subtitle: Text(
+                                            'P50 ${row.p50ErrorCents.toStringAsFixed(1)}c • P90 ${row.p90ErrorCents.toStringAsFixed(1)}c',
+                                          ),
                                           trailing: Text('n=${row.sampleSize}'),
                                         ),
                                     ],
@@ -939,34 +1202,65 @@ class SessionDetailScreen extends StatelessWidget {
           return FutureBuilder<List<DriftEventRecord>>(
             future: SessionRepository.instance.driftEventsForSession(sessionId),
             builder: (context, driftSnapshot) {
-              final driftEvents = driftSnapshot.data ?? const <DriftEventRecord>[];
+              final driftEvents =
+                  driftSnapshot.data ?? const <DriftEventRecord>[];
               return ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  Text(session.modeLabel, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  Text(
+                    session.modeLabel,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 84,
-                    child: _SessionTimeline(session: session, driftEvents: driftEvents),
+                    child: _SessionTimeline(
+                      session: session,
+                      driftEvents: driftEvents,
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  ListTile(title: const Text('Duration'), subtitle: Text(_formatDuration(session.durationMs))),
-                  ListTile(title: const Text('Average cents error'), subtitle: Text('${session.avgErrorCents.toStringAsFixed(1)}c')),
-                  ListTile(title: const Text('Stability score'), subtitle: Text(session.stabilityScore.toStringAsFixed(1))),
-                  ListTile(title: const Text('Drift events'), subtitle: Text('${session.driftCount} confirmed drifts')),
+                  ListTile(
+                    title: const Text('Duration'),
+                    subtitle: Text(_formatDuration(session.durationMs)),
+                  ),
+                  ListTile(
+                    title: const Text('Average cents error'),
+                    subtitle: Text(
+                      '${session.avgErrorCents.toStringAsFixed(1)}c',
+                    ),
+                  ),
+                  ListTile(
+                    title: const Text('Stability score'),
+                    subtitle: Text(session.stabilityScore.toStringAsFixed(1)),
+                  ),
+                  ListTile(
+                    title: const Text('Drift events'),
+                    subtitle: Text('${session.driftCount} confirmed drifts'),
+                  ),
                   const Divider(),
-                  const Text('Drift markers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const Text(
+                    'Drift markers',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
                   if (driftEvents.isEmpty)
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
-                      child: Text('No drift markers recorded for this session.'),
+                      child: Text(
+                        'No drift markers recorded for this session.',
+                      ),
                     )
                   else
                     ...driftEvents.map(
                       (event) => ListTile(
                         leading: const Icon(Icons.warning_amber_rounded),
                         title: Text('Drift #${event.eventIndex + 1}'),
-                        subtitle: Text('Recorded at ${_formatEpochTime(event.confirmedAtMs)}'),
+                        subtitle: Text(
+                          'Recorded at ${_formatEpochTime(event.confirmedAtMs)}',
+                        ),
                         onTap: () => showModalBottomSheet<void>(
                           context: context,
                           showDragHandle: true,
@@ -996,6 +1290,13 @@ class DriftReplaySheet extends StatefulWidget {
 class _DriftReplaySheetState extends State<DriftReplaySheet> {
   double _progress = 0;
   Timer? _timer;
+  Future<List<_SnippetReplayFrame>>? _snippetFramesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _snippetFramesFuture = _loadSnippetFrames();
+  }
 
   @override
   void dispose() {
@@ -1020,12 +1321,44 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
     });
   }
 
+  Future<List<_SnippetReplayFrame>> _loadSnippetFrames() async {
+    final uri = widget.event.audioSnippetUri;
+    if (uri == null || uri.isEmpty) {
+      return const <_SnippetReplayFrame>[];
+    }
+    final file = File(uri);
+    if (!await file.exists()) {
+      return const <_SnippetReplayFrame>[];
+    }
+    final rawJson = await file.readAsString();
+    final decoded = jsonDecode(rawJson);
+    if (decoded is! Map<String, dynamic>) {
+      return const <_SnippetReplayFrame>[];
+    }
+    final framesJson = decoded['frames'];
+    if (framesJson is! List<dynamic>) {
+      return const <_SnippetReplayFrame>[];
+    }
+
+    return framesJson
+        .whereType<Map<String, dynamic>>()
+        .map(
+          (frame) => _SnippetReplayFrame(
+            timestampMs: (frame['timestamp_ms'] as num?)?.toInt() ?? 0,
+            centsError: (frame['cents_error'] as num?)?.toDouble() ?? 0,
+            confidence: (frame['confidence'] as num?)?.toDouble() ?? 0,
+          ),
+        )
+        .toList(growable: false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final beforeCents = widget.event.beforeCents;
     final afterCents = widget.event.afterCents;
     final hasData = beforeCents != null && afterCents != null;
-    final liveCents = hasData ? beforeCents + ((afterCents - beforeCents) * _progress) : null;
+    final liveCents =
+        hasData ? beforeCents + ((afterCents - beforeCents) * _progress) : null;
     final delta = hasData ? afterCents - beforeCents : null;
 
     return Padding(
@@ -1034,19 +1367,72 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Drift Replay #${widget.event.eventIndex + 1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(
+            'Drift Replay #${widget.event.eventIndex + 1}',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           Text('Timestamp: ${_formatEpochTime(widget.event.confirmedAtMs)}'),
           Text('Snippet: ${widget.event.audioSnippetUri ?? 'Not attached'}'),
           const SizedBox(height: 12),
           LinearProgressIndicator(value: _progress),
           const SizedBox(height: 12),
+          FutureBuilder<List<_SnippetReplayFrame>>(
+            future: _snippetFramesFuture,
+            builder: (context, snapshot) {
+              final frames = snapshot.data ?? const <_SnippetReplayFrame>[];
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: LinearProgressIndicator(minHeight: 2),
+                );
+              }
+              if (frames.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Snippet frames unavailable for frame-by-frame replay.',
+                  ),
+                );
+              }
+              final start = frames.first.timestampMs;
+              final end = frames.last.timestampMs;
+              final liveIndex = ((_progress * (frames.length - 1)).round())
+                  .clamp(0, frames.length - 1);
+              final liveFrame = frames[liveIndex];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Frame replay: ${frames.length} frames • ${end - start}ms window',
+                    ),
+                    Text(
+                      'Frame @ ${liveFrame.timestampMs - start}ms • '
+                      '${liveFrame.centsError >= 0 ? '+' : ''}${liveFrame.centsError.toStringAsFixed(1)}c • '
+                      'conf ${liveFrame.confidence.toStringAsFixed(2)}',
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           if (!hasData)
-            const Text('Incomplete replay data', style: TextStyle(color: Colors.red))
+            const Text(
+              'Incomplete replay data',
+              style: TextStyle(color: Colors.red),
+            )
           else ...[
-            Text('Before: ${beforeCents.toStringAsFixed(1)}c (MIDI ${widget.event.beforeMidi ?? '—'})'),
-            Text('After: ${afterCents.toStringAsFixed(1)}c (MIDI ${widget.event.afterMidi ?? '—'})'),
-            Text('Live replay: ${liveCents!.toStringAsFixed(1)}c • Δ ${delta! >= 0 ? '+' : ''}${delta.toStringAsFixed(1)}c'),
+            Text(
+              'Before: ${beforeCents.toStringAsFixed(1)}c (MIDI ${widget.event.beforeMidi ?? '—'})',
+            ),
+            Text(
+              'After: ${afterCents.toStringAsFixed(1)}c (MIDI ${widget.event.afterMidi ?? '—'})',
+            ),
+            Text(
+              'Live replay: ${liveCents!.toStringAsFixed(1)}c • Δ ${delta! >= 0 ? '+' : ''}${delta.toStringAsFixed(1)}c',
+            ),
           ],
           const SizedBox(height: 12),
           Row(
@@ -1070,7 +1456,11 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
 }
 
 class _TrendSparkline extends StatelessWidget {
-  const _TrendSparkline({required this.series, required this.selector, required this.color});
+  const _TrendSparkline({
+    required this.series,
+    required this.selector,
+    required this.color,
+  });
 
   final List<TrendPoint> series;
   final double Function(TrendPoint point) selector;
@@ -1079,7 +1469,9 @@ class _TrendSparkline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (series.length < 2) {
-      return const Center(child: Text('Need at least 2 sessions for trend chart.'));
+      return const Center(
+        child: Text('Need at least 2 sessions for trend chart.'),
+      );
     }
     return CustomPaint(
       painter: _SparklinePainter(
@@ -1107,7 +1499,11 @@ class _SparklinePainter extends CustomPainter {
       ..color = Colors.white24
       ..strokeWidth = 1;
 
-    canvas.drawLine(Offset(0, size.height - 1), Offset(size.width, size.height - 1), axisPaint);
+    canvas.drawLine(
+      Offset(0, size.height - 1),
+      Offset(size.width, size.height - 1),
+      axisPaint,
+    );
 
     final minV = values.reduce(math.min);
     final maxV = values.reduce(math.max);
@@ -1147,7 +1543,8 @@ class _WeaknessMapGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxError = cells.map((c) => c.avgErrorCents).fold<double>(0, math.max);
+    final maxError =
+        cells.map((c) => c.avgErrorCents).fold<double>(0, math.max);
     return GridView.builder(
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -1159,19 +1556,31 @@ class _WeaknessMapGrid extends StatelessWidget {
       itemCount: cells.length,
       itemBuilder: (context, index) {
         final cell = cells[index];
-        final intensity = maxError <= 0 ? 0.0 : (cell.avgErrorCents / maxError).clamp(0, 1);
+        final intensity = maxError <= 0
+            ? 0.0
+            : (cell.avgErrorCents / maxError).clamp(0.0, 1.0).toDouble();
         return Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            color: Color.lerp(Colors.green.shade700, Colors.red.shade700, intensity),
+            color: Color.lerp(
+              Colors.green.shade700,
+              Colors.red.shade700,
+              intensity,
+            ),
           ),
           padding: const EdgeInsets.all(8),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('${cell.note}${cell.octave}', style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                '${cell.note}${cell.octave}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               Text('${cell.avgErrorCents.toStringAsFixed(1)}c'),
-              Text('${cell.attemptCount} attempts', style: const TextStyle(fontSize: 11)),
+              Text(
+                '${cell.attemptCount} attempts',
+                style: const TextStyle(fontSize: 11),
+              ),
             ],
           ),
         );
@@ -1203,10 +1612,16 @@ class _SessionTimeline extends StatelessWidget {
             ),
             for (final event in driftEvents)
               Positioned(
-                left: ((event.confirmedAtMs - session.startedAtMs) / session.durationMs * constraints.maxWidth)
+                left: ((event.confirmedAtMs - session.startedAtMs) /
+                        session.durationMs *
+                        constraints.maxWidth)
                     .clamp(0, constraints.maxWidth - 10),
                 top: 20,
-                child: const Icon(Icons.location_on, size: 18, color: Colors.orangeAccent),
+                child: const Icon(
+                  Icons.location_on,
+                  size: 18,
+                  color: Colors.orangeAccent,
+                ),
               ),
             Positioned(
               left: 0,
@@ -1239,7 +1654,6 @@ String _formatEpochTime(int epochMs) {
   final ss = dt.second.toString().padLeft(2, '0');
   return '$hh:$mm:$ss';
 }
-}
 
 class LibraryScreen extends StatelessWidget {
   const LibraryScreen({super.key});
@@ -1247,33 +1661,102 @@ class LibraryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: FutureBuilder<Map<String, int>>(
-        future: SessionRepository.instance.libraryCounts(),
+      child: FutureBuilder<_LibraryViewData>(
+        future: _loadLibraryViewData(),
         builder: (context, snapshot) {
-          final counts = snapshot.data ?? const <String, int>{};
+          final data = snapshot.data;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const Text('LIBRARY', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text(
+                'LIBRARY',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 12),
               ListTile(
                 title: const Text('Reference Tones'),
-                subtitle: Text('Active exercise tone sets: ${counts['reference_tones'] ?? 0}'),
+                subtitle: Text(
+                  'Active exercise tone sets: ${data?.counts['reference_tones'] ?? 0}',
+                ),
               ),
               ListTile(
                 title: const Text('Mastery Archive'),
-                subtitle: Text('Mastery history entries: ${counts['mastered_entries'] ?? 0}'),
+                subtitle: Text(
+                  'Mastery history entries: ${data?.counts['mastered_entries'] ?? 0}',
+                ),
               ),
               ListTile(
                 title: const Text('Drift Replay Clips'),
-                subtitle: Text('Recorded drift events available: ${counts['drift_replays'] ?? 0}'),
+                subtitle: Text(
+                  'Recorded drift events available: ${data?.counts['drift_replays'] ?? 0}',
+                ),
               ),
+              const Divider(height: 28),
+              const Text(
+                'Recent drift replays',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              if ((data?.recentDriftEvents.isEmpty ?? true))
+                const Text(
+                  'No drift clips yet. Complete Drift Awareness sessions to populate replay history.',
+                )
+              else
+                ...data!.recentDriftEvents.map(
+                  (item) => ListTile(
+                    leading: const Icon(Icons.play_circle_outline),
+                    title: Text(
+                      '${item.modeLabel} • ${item.exerciseId} • Drift #${item.event.eventIndex + 1}',
+                    ),
+                    subtitle: Text(_formatEpochTime(item.event.confirmedAtMs)),
+                    onTap: () => showModalBottomSheet<void>(
+                      context: context,
+                      showDragHandle: true,
+                      builder: (context) => DriftReplaySheet(event: item.event),
+                    ),
+                  ),
+                ),
             ],
           );
         },
       ),
     );
   }
+
+  Future<_LibraryViewData> _loadLibraryViewData() async {
+    final countsFuture = SessionRepository.instance.libraryCounts();
+    final driftsFuture = SessionRepository.instance.recentDriftEvents(
+      limit: 10,
+    );
+    final counts = await countsFuture;
+    final recentDriftEvents = await driftsFuture;
+    return _LibraryViewData(
+      counts: counts,
+      recentDriftEvents: recentDriftEvents,
+    );
+  }
+}
+
+class _LibraryViewData {
+  const _LibraryViewData({
+    required this.counts,
+    required this.recentDriftEvents,
+  });
+
+  final Map<String, int> counts;
+  final List<DriftEventWithSessionRecord> recentDriftEvents;
+}
+
+class _SnippetReplayFrame {
+  const _SnippetReplayFrame({
+    required this.timestampMs,
+    required this.centsError,
+    required this.confidence,
+  });
+
+  final int timestampMs;
+  final double centsError;
+  final double confidence;
 }
 
 class SettingsScreen extends StatelessWidget {
@@ -1289,11 +1772,27 @@ class SettingsScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const Text('SETTINGS_ROOT', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text(
+                'SETTINGS_ROOT',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 12),
-              ListTile(title: const Text('Pitch Detection'), subtitle: Text('Suggested profile: ${summary['detection_profile'] ?? 'Standard'}')),
-              const ListTile(title: Text('Feedback & Representation'), subtitle: Text('Shape/color mapping editor and preview.')),
-              const ListTile(title: Text('Audio'), subtitle: Text('Input route, reference output, latency diagnostics.')),
+              ListTile(
+                title: const Text('Pitch Detection'),
+                subtitle: Text(
+                  'Suggested profile: ${summary['detection_profile'] ?? 'Standard'}',
+                ),
+              ),
+              const ListTile(
+                title: Text('Feedback & Representation'),
+                subtitle: Text('Shape/color mapping editor and preview.'),
+              ),
+              const ListTile(
+                title: Text('Audio'),
+                subtitle: Text(
+                  'Input route, reference output, latency diagnostics.',
+                ),
+              ),
               ListTile(
                 title: const Text('Training'),
                 subtitle: Text(
@@ -1302,9 +1801,14 @@ class SettingsScreen extends StatelessWidget {
               ),
               ListTile(
                 title: const Text('Data & Privacy'),
-                subtitle: Text('${summary['privacy'] ?? 'Local-only SQLite storage'} • Analytics coverage: ${summary['percentile_coverage'] ?? '0 mode/level groups'}'),
+                subtitle: Text(
+                  '${summary['privacy'] ?? 'Local-only SQLite storage'} • Analytics coverage: ${summary['percentile_coverage'] ?? '0 mode/level groups'}',
+                ),
               ),
-              const ListTile(title: Text('About'), subtitle: Text('Version, licenses and support links.')),
+              const ListTile(
+                title: Text('About'),
+                subtitle: Text('Version, licenses and support links.'),
+              ),
             ],
           );
         },
@@ -1314,7 +1818,12 @@ class SettingsScreen extends StatelessWidget {
 }
 
 class LivePitchScreen extends StatefulWidget {
-  const LivePitchScreen({super.key, required this.exercise, required this.config, required this.level});
+  const LivePitchScreen({
+    super.key,
+    required this.exercise,
+    required this.config,
+    required this.level,
+  });
 
   final ExerciseDefinition exercise;
   final ExerciseConfig config;
@@ -1354,7 +1863,10 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
           stateId != LivePitchStateId.completed;
       if (_sessionStartMs != null && isTrainingActive) {
         if (_lastFrameTimestampMs != null) {
-          final deltaMs = math.max(0, frame.timestampMs - _lastFrameTimestampMs!);
+          final deltaMs = math.max(
+            0,
+            frame.timestampMs - _lastFrameTimestampMs!,
+          );
           _activeTimeMs += deltaMs;
           if (stateId == LivePitchStateId.locked) {
             _lockedTimeMs += deltaMs;
@@ -1390,9 +1902,13 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
             audioSnippetUri: null,
           ),
         );
-        _pendingSnippetWrites.add(_persistDriftSnippet(eventIndex: _driftCount - 1));
+        _pendingSnippetWrites.add(
+          _persistDriftSnippet(eventIndex: _driftCount - 1),
+        );
       }
-      if (_engine.state.id == LivePitchStateId.driftConfirmed && !_replayOpen && widget.exercise.driftAwarenessMode) {
+      if (_engine.state.id == LivePitchStateId.driftConfirmed &&
+          !_replayOpen &&
+          widget.exercise.driftAwarenessMode) {
         _openReplay();
       }
     });
@@ -1427,7 +1943,9 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
         );
       });
     } catch (error) {
-      debugPrint('Failed to persist drift snippet for event $eventIndex: $error');
+      debugPrint(
+        'Failed to persist drift snippet for event $eventIndex: $error',
+      );
     }
   }
 
@@ -1447,10 +1965,17 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('DRIFT_REPLAY', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text(
+                'DRIFT_REPLAY',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
-              Text('Before: ${event?.before.centsError?.toStringAsFixed(1) ?? '—'}c'),
-              Text('After: ${event?.after.centsError?.toStringAsFixed(1) ?? '—'}c'),
+              Text(
+                'Before: ${event?.before.centsError?.toStringAsFixed(1) ?? '—'}c',
+              ),
+              Text(
+                'After: ${event?.after.centsError?.toStringAsFixed(1) ?? '—'}c',
+              ),
               const SizedBox(height: 8),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -1476,7 +2001,8 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     final endedAtMs = DateTime.now().millisecondsSinceEpoch;
     await Future.wait(_pendingSnippetWrites);
     final avgError = _absErrors.reduce((a, b) => a + b) / _absErrors.length;
-    final signedMean = _effectiveErrors.reduce((a, b) => a + b) / _effectiveErrors.length;
+    final signedMean =
+        _effectiveErrors.reduce((a, b) => a + b) / _effectiveErrors.length;
     final variance = _effectiveErrors
             .map((e) => (e - signedMean) * (e - signedMean))
             .reduce((a, b) => a + b) /
@@ -1555,7 +2081,9 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
             _PitchShape(state: state),
             const SizedBox(height: 24),
             Text(
-              widget.config.showNumericOverlay && state.errorReadoutVisible ? 'Cents: ${state.displayCents} ${state.arrow}' : 'Cents: —',
+              widget.config.showNumericOverlay && state.errorReadoutVisible
+                  ? 'Cents: ${state.displayCents} ${state.arrow}'
+                  : 'Cents: —',
               style: const TextStyle(fontSize: 32),
             ),
             Text('State: ${state.id.name}'),
@@ -1590,8 +2118,16 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
                   }),
                   child: const Text('Start'),
                 ),
-                ElevatedButton(onPressed: () => setState(() => _engine.onIntent(TrainingIntent.pause)), child: const Text('Pause')),
-                ElevatedButton(onPressed: () => setState(() => _engine.onIntent(TrainingIntent.resume)), child: const Text('Resume')),
+                ElevatedButton(
+                  onPressed: () =>
+                      setState(() => _engine.onIntent(TrainingIntent.pause)),
+                  child: const Text('Pause'),
+                ),
+                ElevatedButton(
+                  onPressed: () =>
+                      setState(() => _engine.onIntent(TrainingIntent.resume)),
+                  child: const Text('Resume'),
+                ),
                 ElevatedButton(
                   onPressed: () async {
                     setState(() => _engine.onIntent(TrainingIntent.stop));
@@ -1641,15 +2177,35 @@ String _modeDescription(ModeId mode) {
 List<String> _modeBullets(ModeId mode) {
   switch (mode) {
     case ModeId.modePf:
-      return const ['Target hold consistency', 'Confidence in quiet starts', 'Basic stability metrics'];
+      return const [
+        'Target hold consistency',
+        'Confidence in quiet starts',
+        'Basic stability metrics',
+      ];
     case ModeId.modeDa:
-      return const ['Drift candidate awareness', 'Recovery under pressure', 'Before/after drift replay'];
+      return const [
+        'Drift candidate awareness',
+        'Recovery under pressure',
+        'Before/after drift replay',
+      ];
     case ModeId.modeRp:
-      return const ['Semitone jumps', 'Two-step arithmetic', 'Reference-free internal correction'];
+      return const [
+        'Semitone jumps',
+        'Two-step arithmetic',
+        'Reference-free internal correction',
+      ];
     case ModeId.modeGs:
-      return const ['Unison lock in context', 'Chord anchoring', 'Distraction resistance'];
+      return const [
+        'Unison lock in context',
+        'Chord anchoring',
+        'Distraction resistance',
+      ];
     case ModeId.modeLt:
-      return const ['Note identification', 'Color and shape matching', 'Octave discrimination'];
+      return const [
+        'Note identification',
+        'Color and shape matching',
+        'Octave discrimination',
+      ];
   }
 }
 
@@ -1663,8 +2219,14 @@ class _TargetHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text('Target: ${config.targetNote}${config.targetOctave}', style: const TextStyle(fontSize: 22)),
-        Text('MIDI ${_noteToMidi(config.targetNote, config.targetOctave)}', style: const TextStyle(fontSize: 22)),
+        Text(
+          'Target: ${config.targetNote}${config.targetOctave}',
+          style: const TextStyle(fontSize: 22),
+        ),
+        Text(
+          'MIDI ${_noteToMidi(config.targetNote, config.targetOctave)}',
+          style: const TextStyle(fontSize: 22),
+        ),
       ],
     );
   }
@@ -1687,7 +2249,14 @@ class _PitchLine extends StatelessWidget {
             alignment: Alignment.center,
             child: Transform.translate(
               offset: Offset(state.xOffsetPx, 0),
-              child: Container(width: 14, height: 14, decoration: const BoxDecoration(color: Colors.cyan, shape: BoxShape.circle)),
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: const BoxDecoration(
+                  color: Colors.cyan,
+                  shape: BoxShape.circle,
+                ),
+              ),
             ),
           ),
         ],
@@ -1712,7 +2281,11 @@ class _PitchShape extends StatelessWidget {
         shape: BoxShape.circle,
         color: color,
         boxShadow: [
-          BoxShadow(color: color.withOpacity(state.haloIntensity.clamp(0.0, 1.0)), blurRadius: 24, spreadRadius: 6),
+          BoxShadow(
+            color: color.withOpacity(state.haloIntensity.clamp(0.0, 1.0)),
+            blurRadius: 24,
+            spreadRadius: 6,
+          ),
         ],
       ),
       child: Center(child: Text('E=${state.errorFactorE.toStringAsFixed(2)}')),
@@ -1738,6 +2311,19 @@ Color _pitchClassColor(int? midi) {
   if (midi == null) {
     return Colors.blueGrey;
   }
-  final hues = [220.0, 205.0, 190.0, 170.0, 145.0, 95.0, 62.0, 40.0, 24.0, 0.0, 320.0, 275.0];
+  final hues = [
+    220.0,
+    205.0,
+    190.0,
+    170.0,
+    145.0,
+    95.0,
+    62.0,
+    40.0,
+    24.0,
+    0.0,
+    320.0,
+    275.0,
+  ];
   return HSVColor.fromAHSV(1, hues[midi % 12], 0.72, 0.95).toColor();
 }

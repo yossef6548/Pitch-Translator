@@ -107,9 +107,11 @@ class RetentionSnapshot {
   final int retained7DayCount;
   final int retained30DayCount;
 
-  double get retained7DayRatio => masteredCount == 0 ? 0 : retained7DayCount / masteredCount;
+  double get retained7DayRatio =>
+      masteredCount == 0 ? 0 : retained7DayCount / masteredCount;
 
-  double get retained30DayRatio => masteredCount == 0 ? 0 : retained30DayCount / masteredCount;
+  double get retained30DayRatio =>
+      masteredCount == 0 ? 0 : retained30DayCount / masteredCount;
 }
 
 class DriftEventRecord {
@@ -136,6 +138,20 @@ class DriftEventRecord {
   final double? afterCents;
   final double? afterFreqHz;
   final String? audioSnippetUri;
+}
+
+class DriftEventWithSessionRecord {
+  const DriftEventWithSessionRecord({
+    required this.event,
+    required this.sessionId,
+    required this.modeLabel,
+    required this.exerciseId,
+  });
+
+  final DriftEventRecord event;
+  final int sessionId;
+  final String modeLabel;
+  final String exerciseId;
 }
 
 class DriftEventWrite {
@@ -271,25 +287,35 @@ class SessionRepository {
     final existingColumns = driftColumns.map((row) => row['name']).toSet();
 
     if (!existingColumns.contains('before_midi')) {
-      await db.execute('ALTER TABLE drift_events ADD COLUMN before_midi INTEGER');
+      await db.execute(
+        'ALTER TABLE drift_events ADD COLUMN before_midi INTEGER',
+      );
     }
     if (!existingColumns.contains('before_cents')) {
       await db.execute('ALTER TABLE drift_events ADD COLUMN before_cents REAL');
     }
     if (!existingColumns.contains('before_freq_hz')) {
-      await db.execute('ALTER TABLE drift_events ADD COLUMN before_freq_hz REAL');
+      await db.execute(
+        'ALTER TABLE drift_events ADD COLUMN before_freq_hz REAL',
+      );
     }
     if (!existingColumns.contains('after_midi')) {
-      await db.execute('ALTER TABLE drift_events ADD COLUMN after_midi INTEGER');
+      await db.execute(
+        'ALTER TABLE drift_events ADD COLUMN after_midi INTEGER',
+      );
     }
     if (!existingColumns.contains('after_cents')) {
       await db.execute('ALTER TABLE drift_events ADD COLUMN after_cents REAL');
     }
     if (!existingColumns.contains('after_freq_hz')) {
-      await db.execute('ALTER TABLE drift_events ADD COLUMN after_freq_hz REAL');
+      await db.execute(
+        'ALTER TABLE drift_events ADD COLUMN after_freq_hz REAL',
+      );
     }
     if (!existingColumns.contains('audio_snippet_uri')) {
-      await db.execute('ALTER TABLE drift_events ADD COLUMN audio_snippet_uri TEXT');
+      await db.execute(
+        'ALTER TABLE drift_events ADD COLUMN audio_snippet_uri TEXT',
+      );
     }
   }
 
@@ -387,7 +413,11 @@ class SessionRepository {
 
   Future<List<SessionRecord>> recentSessions({int limit = 20}) async {
     final db = await _database();
-    final rows = await db.query('sessions', orderBy: 'ended_at_ms DESC', limit: limit);
+    final rows = await db.query(
+      'sessions',
+      orderBy: 'ended_at_ms DESC',
+      limit: limit,
+    );
     return rows.map(SessionRecord.fromMap).toList(growable: false);
   }
 
@@ -427,9 +457,15 @@ class SessionRepository {
 
   Future<Map<String, int>> libraryCounts() async {
     final db = await _database();
-    final tones = await db.rawQuery('SELECT COUNT(DISTINCT exercise_id) AS count FROM sessions');
-    final mastery = await db.rawQuery('SELECT COUNT(*) AS count FROM mastery_history');
-    final driftReplays = await db.rawQuery('SELECT COUNT(*) AS count FROM drift_events');
+    final tones = await db.rawQuery(
+      'SELECT COUNT(DISTINCT exercise_id) AS count FROM sessions',
+    );
+    final mastery = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM mastery_history',
+    );
+    final driftReplays = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM drift_events',
+    );
     return {
       'reference_tones': (tones.first['count'] as num?)?.toInt() ?? 0,
       'mastered_entries': (mastery.first['count'] as num?)?.toInt() ?? 0,
@@ -440,8 +476,12 @@ class SessionRepository {
   Future<Map<String, String>> settingsSummary() async {
     final db = await _database();
     // Start all independent async operations concurrently to reduce overall latency.
-    final attemptsFuture = db.rawQuery('SELECT COUNT(*) AS total, SUM(assisted) AS assisted FROM attempts');
-    final avgFuture = db.rawQuery('SELECT AVG(avg_error_cents) AS avg_error FROM sessions');
+    final attemptsFuture = db.rawQuery(
+      'SELECT COUNT(*) AS total, SUM(assisted) AS assisted FROM attempts',
+    );
+    final avgFuture = db.rawQuery(
+      'SELECT AVG(avg_error_cents) AS avg_error FROM sessions',
+    );
     final retentionFuture = retentionSnapshot();
     final percentilesFuture = modeLevelPercentiles();
 
@@ -454,9 +494,17 @@ class SessionRepository {
     final assisted = (row['assisted'] as num?)?.toInt() ?? 0;
     final avgError = ((avgRows.first['avg_error'] as num?) ?? 0).toDouble();
     return {
-      'detection_profile': avgError <= 20 ? 'Strict' : avgError <= 35 ? 'Standard' : 'Relaxed',
-      'assist_ratio': total == 0 ? '0%' : '${((assisted / total) * 100).round()}%',
-      'retention_30d': retention.masteredCount == 0 ? '0%' : '${(retention.retained30DayRatio * 100).round()}%',
+      'detection_profile': avgError <= 20
+          ? 'Strict'
+          : avgError <= 35
+          ? 'Standard'
+          : 'Relaxed',
+      'assist_ratio': total == 0
+          ? '0%'
+          : '${((assisted / total) * 100).round()}%',
+      'retention_30d': retention.masteredCount == 0
+          ? '0%'
+          : '${(retention.retained30DayRatio * 100).round()}%',
       'percentile_coverage': '${percentiles.length} mode/level groups',
       'privacy': 'Local-only SQLite storage',
     };
@@ -466,14 +514,12 @@ class SessionRepository {
     final db = await _database();
 
     // First, get the distinct (exercise_id, level_id) groups with their sample sizes.
-    final groupRows = await db.rawQuery(
-      '''
+    final groupRows = await db.rawQuery('''
       SELECT exercise_id, level_id, COUNT(*) AS sample_size
       FROM attempts
       WHERE avg_error_cents IS NOT NULL
       GROUP BY exercise_id, level_id
-      ''',
-    );
+      ''');
 
     final output = <ModeLevelPercentile>[];
 
@@ -603,7 +649,12 @@ class SessionRepository {
 
   Future<SessionRecord?> sessionById(int id) async {
     final db = await _database();
-    final rows = await db.query('sessions', where: 'id = ?', whereArgs: [id], limit: 1);
+    final rows = await db.query(
+      'sessions',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
     return rows.isEmpty ? null : SessionRecord.fromMap(rows.first);
   }
 
@@ -611,7 +662,12 @@ class SessionRepository {
     final db = await _database();
     final rows = await db.query(
       'sessions',
-      columns: ['ended_at_ms', 'avg_error_cents', 'stability_score', 'drift_count'],
+      columns: [
+        'ended_at_ms',
+        'avg_error_cents',
+        'stability_score',
+        'drift_count',
+      ],
       orderBy: 'ended_at_ms DESC',
       limit: limit,
     );
@@ -632,8 +688,7 @@ class SessionRepository {
 
   Future<List<WeaknessMapCell>> weaknessMap() async {
     final db = await _database();
-    final rows = await db.rawQuery(
-      '''
+    final rows = await db.rawQuery('''
       SELECT
         target_note,
         target_octave,
@@ -643,8 +698,7 @@ class SessionRepository {
       WHERE target_note IS NOT NULL AND target_octave IS NOT NULL AND avg_error_cents IS NOT NULL
       GROUP BY target_note, target_octave
       ORDER BY target_octave ASC, target_note ASC
-      ''',
-    );
+      ''');
     return rows
         .map(
           (row) => WeaknessMapCell(
@@ -678,6 +732,57 @@ class SessionRepository {
             afterCents: (row['after_cents'] as num?)?.toDouble(),
             afterFreqHz: (row['after_freq_hz'] as num?)?.toDouble(),
             audioSnippetUri: row['audio_snippet_uri'] as String?,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<DriftEventWithSessionRecord>> recentDriftEvents({
+    int limit = 20,
+  }) async {
+    final db = await _database();
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        d.id,
+        d.event_index,
+        d.confirmed_at_ms,
+        d.before_midi,
+        d.before_cents,
+        d.before_freq_hz,
+        d.after_midi,
+        d.after_cents,
+        d.after_freq_hz,
+        d.audio_snippet_uri,
+        s.id AS session_id,
+        s.mode_label,
+        s.exercise_id
+      FROM drift_events d
+      INNER JOIN sessions s ON s.id = d.session_id
+      ORDER BY d.confirmed_at_ms DESC
+      LIMIT ?
+      ''',
+      [limit],
+    );
+
+    return rows
+        .map(
+          (row) => DriftEventWithSessionRecord(
+            sessionId: (row['session_id'] as num).toInt(),
+            modeLabel: row['mode_label'] as String,
+            exerciseId: row['exercise_id'] as String,
+            event: DriftEventRecord(
+              id: row['id'] as int,
+              eventIndex: (row['event_index'] as num).toInt(),
+              confirmedAtMs: (row['confirmed_at_ms'] as num).toInt(),
+              beforeMidi: (row['before_midi'] as num?)?.toInt(),
+              beforeCents: (row['before_cents'] as num?)?.toDouble(),
+              beforeFreqHz: (row['before_freq_hz'] as num?)?.toDouble(),
+              afterMidi: (row['after_midi'] as num?)?.toInt(),
+              afterCents: (row['after_cents'] as num?)?.toDouble(),
+              afterFreqHz: (row['after_freq_hz'] as num?)?.toDouble(),
+              audioSnippetUri: row['audio_snippet_uri'] as String?,
+            ),
           ),
         )
         .toList(growable: false);
