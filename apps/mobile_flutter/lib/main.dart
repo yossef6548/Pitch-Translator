@@ -840,15 +840,10 @@ class SessionDetailScreen extends StatelessWidget {
                         leading: const Icon(Icons.warning_amber_rounded),
                         title: Text('Drift #${event.eventIndex + 1}'),
                         subtitle: Text('Recorded at ${_formatEpochTime(event.confirmedAtMs)}'),
-                        onTap: () => showDialog<void>(
+                        onTap: () => showModalBottomSheet<void>(
                           context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Drift Replay Preview'),
-                            content: Text('Replay hook for drift marker #${event.eventIndex + 1} is ready for native audio snippet integration.'),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
-                            ],
-                          ),
+                          showDragHandle: true,
+                          builder: (context) => DriftReplaySheet(event: event),
                         ),
                       ),
                     ),
@@ -857,6 +852,91 @@ class SessionDetailScreen extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+}
+
+class DriftReplaySheet extends StatefulWidget {
+  const DriftReplaySheet({super.key, required this.event});
+
+  final DriftEventRecord event;
+
+  @override
+  State<DriftReplaySheet> createState() => _DriftReplaySheetState();
+}
+
+class _DriftReplaySheetState extends State<DriftReplaySheet> {
+  double _progress = 0;
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _play() {
+    _timer?.cancel();
+    setState(() => _progress = 0);
+    _timer = Timer.periodic(const Duration(milliseconds: 33), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _progress = (_progress + 0.016).clamp(0, 1);
+      });
+      if (_progress >= 1) {
+        timer.cancel();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final beforeCents = widget.event.beforeCents;
+    final afterCents = widget.event.afterCents;
+    final hasData = beforeCents != null && afterCents != null;
+    final liveCents = hasData ? beforeCents + ((afterCents - beforeCents) * _progress) : null;
+    final delta = hasData ? afterCents - beforeCents : null;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Drift Replay #${widget.event.eventIndex + 1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text('Timestamp: ${_formatEpochTime(widget.event.confirmedAtMs)}'),
+          Text('Snippet: ${widget.event.audioSnippetUri ?? 'Not attached'}'),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(value: _progress),
+          const SizedBox(height: 12),
+          if (!hasData)
+            const Text('Incomplete replay data', style: TextStyle(color: Colors.red))
+          else ...[
+            Text('Before: ${beforeCents.toStringAsFixed(1)}c (MIDI ${widget.event.beforeMidi ?? '—'})'),
+            Text('After: ${afterCents.toStringAsFixed(1)}c (MIDI ${widget.event.afterMidi ?? '—'})'),
+            Text('Live replay: ${liveCents!.toStringAsFixed(1)}c • Δ ${delta! >= 0 ? '+' : ''}${delta.toStringAsFixed(1)}c'),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              FilledButton.icon(
+                onPressed: hasData ? _play : null,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Play replay'),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1122,7 +1202,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
   int _lockedTimeMs = 0;
   int? _lastFrameTimestampMs;
   int _lastDriftAfterTimestamp = -1;
-  final List<int> _driftConfirmedAtMs = <int>[];
+  final List<DriftEventWrite> _driftEvents = <DriftEventWrite>[];
 
   @override
   void initState() {
@@ -1158,9 +1238,20 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
           driftEvent.after.timestampMs > _lastDriftAfterTimestamp) {
         _lastDriftAfterTimestamp = driftEvent.after.timestampMs;
         _driftCount += 1;
-        // Use wall-clock epoch ms so the timestamp aligns with session.startedAtMs
-        // (DSP frame timestamps are relative starting from 0, not epoch ms).
-        _driftConfirmedAtMs.add(DateTime.now().millisecondsSinceEpoch);
+        final confirmedAtMs = DateTime.now().millisecondsSinceEpoch;
+        _driftEvents.add(
+          DriftEventWrite(
+            eventIndex: _driftCount - 1,
+            confirmedAtMs: confirmedAtMs,
+            beforeMidi: driftEvent.before.nearestMidi,
+            beforeCents: driftEvent.before.centsError,
+            beforeFreqHz: driftEvent.before.freqHz,
+            afterMidi: driftEvent.after.nearestMidi,
+            afterCents: driftEvent.after.centsError,
+            afterFreqHz: driftEvent.after.freqHz,
+            audioSnippetUri: 'session-${_sessionStartMs ?? confirmedAtMs}-drift-${_driftCount - 1}.pcm',
+          ),
+        );
       }
       if (_engine.state.id == LivePitchStateId.driftConfirmed && !_replayOpen && widget.exercise.driftAwarenessMode) {
         _openReplay();
@@ -1247,7 +1338,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     );
     await SessionRepository.instance.recordDriftEvents(
       sessionId: sessionId,
-      confirmedAtMs: List<int>.from(_driftConfirmedAtMs),
+      events: List<DriftEventWrite>.from(_driftEvents),
     );
     if (success) {
       await SessionRepository.instance.recordMastery(
@@ -1264,7 +1355,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     _lockedTimeMs = 0;
     _lastFrameTimestampMs = null;
     _lastDriftAfterTimestamp = -1;
-    _driftConfirmedAtMs.clear();
+    _driftEvents.clear();
   }
 
   @override
@@ -1319,7 +1410,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
                       _lockedTimeMs = 0;
                       _lastFrameTimestampMs = null;
                       _lastDriftAfterTimestamp = -1;
-                      _driftConfirmedAtMs.clear();
+                      _driftEvents.clear();
                     }
                     _engine.onIntent(TrainingIntent.start);
                   }),

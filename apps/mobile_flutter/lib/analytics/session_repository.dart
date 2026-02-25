@@ -85,11 +85,49 @@ class DriftEventRecord {
     required this.id,
     required this.eventIndex,
     required this.confirmedAtMs,
+    this.beforeMidi,
+    this.beforeCents,
+    this.beforeFreqHz,
+    this.afterMidi,
+    this.afterCents,
+    this.afterFreqHz,
+    this.audioSnippetUri,
   });
 
   final int id;
   final int eventIndex;
   final int confirmedAtMs;
+  final int? beforeMidi;
+  final double? beforeCents;
+  final double? beforeFreqHz;
+  final int? afterMidi;
+  final double? afterCents;
+  final double? afterFreqHz;
+  final String? audioSnippetUri;
+}
+
+class DriftEventWrite {
+  const DriftEventWrite({
+    required this.eventIndex,
+    required this.confirmedAtMs,
+    this.beforeMidi,
+    this.beforeCents,
+    this.beforeFreqHz,
+    this.afterMidi,
+    this.afterCents,
+    this.afterFreqHz,
+    this.audioSnippetUri,
+  });
+
+  final int eventIndex;
+  final int confirmedAtMs;
+  final int? beforeMidi;
+  final double? beforeCents;
+  final double? beforeFreqHz;
+  final int? afterMidi;
+  final double? afterCents;
+  final double? afterFreqHz;
+  final String? audioSnippetUri;
 }
 
 class SessionRepository {
@@ -107,7 +145,7 @@ class SessionRepository {
 
     _db = await openDatabase(
       dbPath,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async => _createSchema(db),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -115,6 +153,9 @@ class SessionRepository {
         }
         if (oldVersion < 3) {
           await _migrateToV3(db);
+        }
+        if (oldVersion < 4) {
+          await _migrateToV4(db);
         }
       },
     );
@@ -137,6 +178,7 @@ class SessionRepository {
     ''');
     await _createV2Tables(db);
     await _migrateToV3(db);
+    await _migrateToV4(db);
   }
 
   Future<void> _createV2Tables(Database db) async {
@@ -188,6 +230,33 @@ class SessionRepository {
     }
   }
 
+  Future<void> _migrateToV4(Database db) async {
+    final driftColumns = await db.rawQuery('PRAGMA table_info(drift_events)');
+    final existingColumns = driftColumns.map((row) => row['name']).toSet();
+
+    if (!existingColumns.contains('before_midi')) {
+      await db.execute('ALTER TABLE drift_events ADD COLUMN before_midi INTEGER');
+    }
+    if (!existingColumns.contains('before_cents')) {
+      await db.execute('ALTER TABLE drift_events ADD COLUMN before_cents REAL');
+    }
+    if (!existingColumns.contains('before_freq_hz')) {
+      await db.execute('ALTER TABLE drift_events ADD COLUMN before_freq_hz REAL');
+    }
+    if (!existingColumns.contains('after_midi')) {
+      await db.execute('ALTER TABLE drift_events ADD COLUMN after_midi INTEGER');
+    }
+    if (!existingColumns.contains('after_cents')) {
+      await db.execute('ALTER TABLE drift_events ADD COLUMN after_cents REAL');
+    }
+    if (!existingColumns.contains('after_freq_hz')) {
+      await db.execute('ALTER TABLE drift_events ADD COLUMN after_freq_hz REAL');
+    }
+    if (!existingColumns.contains('audio_snippet_uri')) {
+      await db.execute('ALTER TABLE drift_events ADD COLUMN audio_snippet_uri TEXT');
+    }
+  }
+
   Future<int> recordSession({
     required String exerciseId,
     required String modeLabel,
@@ -235,16 +304,23 @@ class SessionRepository {
 
   Future<void> recordDriftEvents({
     required int sessionId,
-    required List<int> confirmedAtMs,
+    required List<DriftEventWrite> events,
   }) async {
-    if (confirmedAtMs.isEmpty) return;
+    if (events.isEmpty) return;
     final db = await _database();
     final batch = db.batch();
-    for (var i = 0; i < confirmedAtMs.length; i++) {
+    for (final event in events) {
       batch.insert('drift_events', {
         'session_id': sessionId,
-        'event_index': i,
-        'confirmed_at_ms': confirmedAtMs[i],
+        'event_index': event.eventIndex,
+        'confirmed_at_ms': event.confirmedAtMs,
+        'before_midi': event.beforeMidi,
+        'before_cents': event.beforeCents,
+        'before_freq_hz': event.beforeFreqHz,
+        'after_midi': event.afterMidi,
+        'after_cents': event.afterCents,
+        'after_freq_hz': event.afterFreqHz,
+        'audio_snippet_uri': event.audioSnippetUri,
       });
     }
     await batch.commit(noResult: true);
@@ -401,6 +477,13 @@ class SessionRepository {
             id: row['id'] as int,
             eventIndex: (row['event_index'] as num).toInt(),
             confirmedAtMs: (row['confirmed_at_ms'] as num).toInt(),
+            beforeMidi: (row['before_midi'] as num?)?.toInt(),
+            beforeCents: (row['before_cents'] as num?)?.toDouble(),
+            beforeFreqHz: (row['before_freq_hz'] as num?)?.toDouble(),
+            afterMidi: (row['after_midi'] as num?)?.toInt(),
+            afterCents: (row['after_cents'] as num?)?.toDouble(),
+            afterFreqHz: (row['after_freq_hz'] as num?)?.toDouble(),
+            audioSnippetUri: row['audio_snippet_uri'] as String?,
           ),
         )
         .toList(growable: false);
