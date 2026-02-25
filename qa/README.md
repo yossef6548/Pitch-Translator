@@ -15,6 +15,7 @@ This folder contains deterministic QA assets and guidance for validating `specs/
   - drift confirmation/replay trigger precondition (QA-DA-02)
   - vibrato acceptance/rejection paths (QA-VB-01 / QA-VB-02)
   - visual determinism scalars (QA-VD-01 / QA-VD-02)
+- Audio bridge behavior tests under `apps/mobile_flutter/test/audio/native_audio_bridge_test.dart` to verify deterministic simulator fallback in plugin-missing environments and strict failure behavior when fallback is disabled.
 - QA matrix tests under `apps/mobile_flutter/test/qa/qa_matrix_test.dart` covering:
   - PF lock/near-miss/silent-hold failure scenarios (QA-PF-01 / QA-PF-02 / QA-PF-03)
   - DA recovery-time success criteria (QA-DA-03)
@@ -47,6 +48,7 @@ From repo root:
 
 ```bash
 cd apps/mobile_flutter
+flutter test test/audio/native_audio_bridge_test.dart
 flutter test test/qa/replay_harness_test.dart
 flutter test test/qa/qa_matrix_test.dart
 flutter test test/training_engine_test.dart
