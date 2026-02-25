@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'analytics/session_repository.dart';
 import 'audio/native_audio_bridge.dart';
 import 'exercises/exercise_catalog.dart';
+import 'qa/drift_snippet_recorder.dart';
 import 'training/training_engine.dart';
 
 const _notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -1337,6 +1338,8 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
   int? _lastFrameTimestampMs;
   int _lastDriftAfterTimestamp = -1;
   final List<DriftEventWrite> _driftEvents = <DriftEventWrite>[];
+  final DriftSnippetRecorder _snippetRecorder = DriftSnippetRecorder();
+  final List<Future<void>> _pendingSnippetWrites = <Future<void>>[];
 
   @override
   void initState() {
@@ -1344,6 +1347,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     _engine = TrainingEngine(config: widget.config);
     _sub = _bridge.frames().listen((frame) {
       setState(() => _engine.onDspFrame(frame));
+      _snippetRecorder.addFrame(frame);
       final stateId = _engine.state.id;
       final isTrainingActive = stateId != LivePitchStateId.idle &&
           stateId != LivePitchStateId.paused &&
@@ -1383,14 +1387,48 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
             afterMidi: driftEvent.after.nearestMidi,
             afterCents: driftEvent.after.centsError,
             afterFreqHz: driftEvent.after.freqHz,
-            audioSnippetUri: 'session-${_sessionStartMs ?? confirmedAtMs}-drift-${_driftCount - 1}.pcm',
+            audioSnippetUri: null,
           ),
         );
+        _pendingSnippetWrites.add(_persistDriftSnippet(eventIndex: _driftCount - 1));
       }
       if (_engine.state.id == LivePitchStateId.driftConfirmed && !_replayOpen && widget.exercise.driftAwarenessMode) {
         _openReplay();
       }
     });
+  }
+
+  Future<void> _persistDriftSnippet({required int eventIndex}) async {
+    final sessionStartMs = _sessionStartMs;
+    if (sessionStartMs == null) {
+      return;
+    }
+    try {
+      final snippetPath = await _snippetRecorder.persistSnippet(
+        sessionStartMs: sessionStartMs,
+        eventIndex: eventIndex,
+      );
+      final absolutePath = snippetPath;
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final existing = _driftEvents[eventIndex];
+        _driftEvents[eventIndex] = DriftEventWrite(
+          eventIndex: existing.eventIndex,
+          confirmedAtMs: existing.confirmedAtMs,
+          beforeMidi: existing.beforeMidi,
+          beforeCents: existing.beforeCents,
+          beforeFreqHz: existing.beforeFreqHz,
+          afterMidi: existing.afterMidi,
+          afterCents: existing.afterCents,
+          afterFreqHz: existing.afterFreqHz,
+          audioSnippetUri: absolutePath,
+        );
+      });
+    } catch (error) {
+      debugPrint('Failed to persist drift snippet for event $eventIndex: $error');
+    }
   }
 
   Future<void> _openReplay() async {
@@ -1436,6 +1474,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
       return;
     }
     final endedAtMs = DateTime.now().millisecondsSinceEpoch;
+    await Future.wait(_pendingSnippetWrites);
     final avgError = _absErrors.reduce((a, b) => a + b) / _absErrors.length;
     final signedMean = _effectiveErrors.reduce((a, b) => a + b) / _effectiveErrors.length;
     final variance = _effectiveErrors
@@ -1490,6 +1529,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     _lastFrameTimestampMs = null;
     _lastDriftAfterTimestamp = -1;
     _driftEvents.clear();
+    _pendingSnippetWrites.clear();
   }
 
   @override
