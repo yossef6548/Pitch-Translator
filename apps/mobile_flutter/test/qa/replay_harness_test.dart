@@ -55,11 +55,17 @@ void main() {
     engine.onIntent(TrainingIntent.start);
 
     final harness = ReplayHarness(engine);
+    // Low-confidence sustained for ~500 ms (500–1000 ms) to match spec QA-G-02.
     final frames = <DspFrame>[
       frame(0, cents: 2, confidence: 0.92),
       frame(160, cents: 1, confidence: 0.92),
       frame(340, cents: 1, confidence: 0.92),
       frame(500, cents: 0, confidence: 0.55),
+      frame(600, cents: 0, confidence: 0.55),
+      frame(700, cents: 0, confidence: 0.55),
+      frame(800, cents: 0, confidence: 0.55),
+      frame(900, cents: 0, confidence: 0.55),
+      frame(1000, cents: 0, confidence: 0.55),
     ];
     final result = harness.runFrames(frames);
 
