@@ -22,9 +22,25 @@ class NativeAudioBridge {
   final bool enableSimulationFallback;
 
   Stream<DspFrame>? _cachedStream;
+  StreamSubscription<DspFrame>? _cachedSubscription;
 
   Stream<DspFrame> frames() {
-    return _cachedStream ??= _createFrameStream().asBroadcastStream();
+    if (_cachedStream == null) {
+      final controller = StreamController<DspFrame>.broadcast();
+      _cachedSubscription = _createFrameStream().listen(
+        controller.add,
+        onError: controller.addError,
+        onDone: controller.close,
+      );
+      _cachedStream = controller.stream;
+    }
+    return _cachedStream!;
+  }
+
+  Future<void> dispose() async {
+    await _cachedSubscription?.cancel();
+    _cachedSubscription = null;
+    _cachedStream = null;
   }
 
   Future<void> start() async {
@@ -51,10 +67,7 @@ class NativeAudioBridge {
     if (enableSimulationFallback) {
       try {
         yield* _nativeFrameStream();
-        return;
       } on MissingPluginException {
-        yield* _simulatedFrames();
-      } on PlatformException {
         yield* _simulatedFrames();
       }
       return;
@@ -64,14 +77,17 @@ class NativeAudioBridge {
   }
 
   Stream<DspFrame> _nativeFrameStream() {
+    // No initialization parameters are required by the native audio frame stream.
     return _frameChannel
-        .receiveBroadcastStream()
+        .receiveBroadcastStream(null)
         .map((dynamic event) => _frameFromEvent(event));
   }
 
   DspFrame _frameFromEvent(dynamic event) {
     if (event is! Map) {
-      throw const FormatException('Native audio frame must be a JSON map payload.');
+      throw FormatException(
+        'Native audio frame must be a JSON map payload, received: ${event.runtimeType}',
+      );
     }
 
     final normalized = <String, dynamic>{
@@ -79,7 +95,15 @@ class NativeAudioBridge {
         entry.key.toString(): entry.value,
     };
 
-    return DspFrame.fromJson(normalized);
+    try {
+      return DspFrame.fromJson(normalized);
+    } on FormatException catch (e) {
+      // Provide more helpful context if the payload schema is invalid or keys are unexpected.
+      throw FormatException(
+        'Invalid native audio frame payload. Received keys: '
+        '${normalized.keys.toList()} (${e.message})',
+      );
+    }
   }
 
   Stream<DspFrame> _simulatedFrames() {
