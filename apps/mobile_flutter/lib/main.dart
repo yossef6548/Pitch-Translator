@@ -1344,8 +1344,8 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
         .whereType<Map<String, dynamic>>()
         .map(
           (frame) => _SnippetReplayFrame(
-            timestampMs: (frame['timestampMs'] as num?)?.toInt() ?? 0,
-            centsError: (frame['centsError'] as num?)?.toDouble() ?? 0,
+            timestampMs: (frame['timestamp_ms'] as num?)?.toInt() ?? 0,
+            centsError: (frame['cents_error'] as num?)?.toDouble() ?? 0,
             confidence: (frame['confidence'] as num?)?.toDouble() ?? 0,
           ),
         )
