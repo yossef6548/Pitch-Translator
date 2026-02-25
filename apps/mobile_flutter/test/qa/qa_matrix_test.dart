@@ -150,6 +150,31 @@ void main() {
       expect(result.driftEvents, 0);
     });
 
+    test('QA-GS-01b consecutive unusable frames count toward activeMs', () {
+      const evaluator = GroupSimulationEvaluator();
+      // Three locked frames followed by three unusable (null-cents) frames.
+      // The unusable frames span 750ms; that time must be included in activeMs
+      // so lockRatio is well below 1.0.
+      final frames = <DspFrame>[
+        dspFrame(0, nearestMidi: 60, cents: 5),
+        dspFrame(250, nearestMidi: 60, cents: 4),
+        dspFrame(500, nearestMidi: 60, cents: 3),
+        dspFrame(750, cents: null, confidence: 0.0),
+        dspFrame(1000, cents: null, confidence: 0.0),
+        dspFrame(1250, cents: null, confidence: 0.0),
+      ];
+
+      final result = evaluator.evaluate(
+        frames: frames,
+        anchorMidi: 60,
+        toleranceCents: 20,
+        driftThresholdCents: 30,
+      );
+
+      // lockedMs ≈ 500, activeMs ≈ 1250 → lockRatio ≈ 0.4, not 1.0
+      expect(result.lockRatio, lessThan(0.6));
+    });
+
     test('QA-GS-02 chord confusion logs drift and fails mastery gate', () {
       const evaluator = GroupSimulationEvaluator();
       final frames = <DspFrame>[

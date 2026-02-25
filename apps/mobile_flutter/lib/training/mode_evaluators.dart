@@ -93,14 +93,15 @@ class GroupSimulationEvaluator {
     int? previousConfusionMidi;
 
     for (final frame in frames) {
-      if (!frame.hasUsablePitch || frame.centsError == null || frame.nearestMidi == null) {
-        previousTimestamp = frame.timestampMs;
-        continue;
-      }
-
-      final dt = previousTimestamp == null ? 0 : (frame.timestampMs - previousTimestamp!).clamp(0, 1000);
+      final dt = previousTimestamp == null
+          ? 0
+          : (frame.timestampMs - previousTimestamp!).clamp(0, 1000);
       previousTimestamp = frame.timestampMs;
       activeMs += dt;
+
+      if (!frame.hasUsablePitch || frame.centsError == null || frame.nearestMidi == null) {
+        continue;
+      }
 
       final isLocked = frame.nearestMidi == anchorMidi && frame.centsError!.abs() <= toleranceCents;
       if (isLocked) {
