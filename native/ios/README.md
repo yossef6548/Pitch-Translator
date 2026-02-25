@@ -1,6 +1,15 @@
 # iOS Native Audio Integration Plan
 
-Status: **Scaffold only (not yet implemented)**
+Status: **Native implementation pending; Flutter channel bridge contract is implemented**
+
+
+## Current integration baseline (completed in Flutter layer)
+
+- `apps/mobile_flutter/lib/audio/native_audio_bridge.dart` now defines production channel names:
+  - frame stream: `pt/audio/frames`
+  - control methods: `pt/audio/control` (`start`, `stop`)
+- If native plugins are unavailable, bridge falls back to deterministic simulated frames for dev/QA continuity.
+- `apps/mobile_flutter/test/audio/native_audio_bridge_test.dart` validates fallback and strict-mode failure behavior.
 
 ## Target stack
 

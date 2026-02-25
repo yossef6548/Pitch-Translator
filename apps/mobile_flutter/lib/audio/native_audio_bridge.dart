@@ -1,11 +1,88 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/services.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
-/// Deterministic simulated audio bridge for development and QA replay.
+/// Audio bridge that prefers native EventChannel streaming and falls back to a
+/// deterministic simulator when native integration is unavailable.
 class NativeAudioBridge {
+  NativeAudioBridge({
+    EventChannel? frameChannel,
+    MethodChannel? controlChannel,
+    this.enableSimulationFallback = true,
+  })  : _frameChannel = frameChannel ?? const EventChannel(_defaultFrameChannelName),
+        _controlChannel = controlChannel ?? const MethodChannel(_defaultControlChannelName);
+
+  static const String _defaultFrameChannelName = 'pt/audio/frames';
+  static const String _defaultControlChannelName = 'pt/audio/control';
+
+  final EventChannel _frameChannel;
+  final MethodChannel _controlChannel;
+  final bool enableSimulationFallback;
+
+  Stream<DspFrame>? _cachedStream;
+
   Stream<DspFrame> frames() {
+    return _cachedStream ??= _createFrameStream().asBroadcastStream();
+  }
+
+  Future<void> start() async {
+    try {
+      await _controlChannel.invokeMethod<void>('start');
+    } on MissingPluginException {
+      if (!enableSimulationFallback) {
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> stop() async {
+    try {
+      await _controlChannel.invokeMethod<void>('stop');
+    } on MissingPluginException {
+      if (!enableSimulationFallback) {
+        rethrow;
+      }
+    }
+  }
+
+  Stream<DspFrame> _createFrameStream() async* {
+    if (enableSimulationFallback) {
+      try {
+        yield* _nativeFrameStream();
+        return;
+      } on MissingPluginException {
+        yield* _simulatedFrames();
+      } on PlatformException {
+        yield* _simulatedFrames();
+      }
+      return;
+    }
+
+    yield* _nativeFrameStream();
+  }
+
+  Stream<DspFrame> _nativeFrameStream() {
+    return _frameChannel
+        .receiveBroadcastStream()
+        .map((dynamic event) => _frameFromEvent(event));
+  }
+
+  DspFrame _frameFromEvent(dynamic event) {
+    if (event is! Map) {
+      throw const FormatException('Native audio frame must be a JSON map payload.');
+    }
+
+    final normalized = <String, dynamic>{
+      for (final entry in event.entries)
+        entry.key.toString(): entry.value,
+    };
+
+    return DspFrame.fromJson(normalized);
+  }
+
+  Stream<DspFrame> _simulatedFrames() {
     const period = Duration(milliseconds: 50);
     var tMs = 0;
     return Stream.periodic(period, (_) {
@@ -59,8 +136,4 @@ class NativeAudioBridge {
       );
     });
   }
-
-  Future<void> start() async {}
-
-  Future<void> stop() async {}
 }

@@ -56,6 +56,7 @@ This monorepo includes:
   - target note+octave picker
   - timbre and reference volume controls
 - LIVE_PITCH integration with selected exercise config
+- Native audio bridge upgraded to prefer platform `EventChannel`/`MethodChannel` transport (`pt/audio/frames`, `pt/audio/control`) with deterministic simulator fallback in plugin-missing/dev environments
 - Drift replay modal/sheet flow scaffolding from confirmed drifts
 - Home quick monitor card upgraded to interactive launch into warm-up exercise
 
@@ -107,10 +108,10 @@ This monorepo includes:
 ## 🚧 Remaining blockers before production release
 
 1. **Native real-time microphone capture pipeline completion**
-   - iOS AVAudioEngine measurement-mode path implementation
-   - Android Oboe/AAudio callback implementation
-   - Real-time frame bridge parity with contract
-   - Verified mic→UI latency budget and session stability on physical devices
+   - ✅ Flutter side channel contract and start/stop control path implemented (`NativeAudioBridge`)
+   - iOS AVAudioEngine measurement-mode path implementation still pending
+   - Android Oboe/AAudio callback implementation still pending
+   - Verified mic→UI latency budget and session stability on physical devices still pending
 
 2. **Native integration QA and performance burn-in**
    - Move FM-02 from engine simulation to device-level route-interruption harness
@@ -143,14 +144,14 @@ This monorepo includes:
 | Analytics | ✅ covered | AN-01 and AN-02 covered in QA matrix tests |
 | Progression/unlock | ✅ covered | PR-01 and PR-02 mapped directly to QA tests |
 | Visual determinism | ✅ covered | VD-01 and VD-02 covered |
-| Failure modes | ⚠️ partial | FM-01 and FM-02 covered at engine layer; native route harness still pending |
+| Failure modes | ⚠️ partial | FM-01 and FM-02 covered at engine layer; Flutter channel fallback path covered, but native route harness is still pending |
 
 ---
 
 ## Recommended next implementation order
 
-1. Native audio I/O bridge completion (iOS + Android)
-2. Native integration/performance QA matrix execution
+1. Native iOS/Android audio callback implementations behind the now-defined Flutter channel contract
+2. Native integration/performance QA matrix execution on physical device matrix
 3. Drift replay audio snippet capture/playback integration
 4. Design tokenization + accessibility closure
 5. DSP hardening/device validation
