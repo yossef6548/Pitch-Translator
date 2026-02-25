@@ -260,24 +260,9 @@ class _AppShellState extends State<AppShell> {
                   exercise: ExerciseCatalog.byId('PF_1'),
                   level: LevelId.l1,
                   config: const ExerciseConfig(
-                    toleranceCents: 35,
-                    driftThresholdCents: PtConstants.defaultDriftThresholdCents,
-                    driftAwarenessMode: false,
-                    countdownMs: PtConstants.defaultCountdownMs,
-                    randomizeTargetWithinRange: false,
-                    referenceToneEnabled: true,
-                    showNumericOverlay: true,
-                    shapeWarpingEnabled: true,
-                    colorFloodEnabled: true,
-                    hapticsEnabled: true,
-                    targetNote: 'A',
-                    targetOctave: 4,
-                    randomizeMinNote: 'C',
-                    randomizeMinOctave: 3,
-                    randomizeMaxNote: 'B',
-                    randomizeMaxOctave: 5,
-                    referenceTimbre: 'Pure Sine',
-                    referenceVolume: 0.8,
+                    referenceToneEnabled: false,
+                    toleranceCents: 20.0,
+                    driftThresholdCents: 30.0,
                   ),
                 ),
               ),
@@ -345,7 +330,7 @@ class HomeTodayScreen extends StatelessWidget {
                     final frame = snapshot.data;
                     final noteLabel = _midiToNoteLabel(frame?.nearestMidi);
                     final haloColor = _pitchClassColor(frame?.nearestMidi);
-                    final markerAlignment = ((frame?.centsError ?? 0) / 50).clamp(-1.0, 1.0).toDouble();
+                    final markerAlignment = ((frame?.centsError ?? 0) / PtConstants.centsErrorClamp).clamp(-1.0, 1.0).toDouble();
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
