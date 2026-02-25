@@ -50,6 +50,128 @@ void main() {
     expect(result.finalState.id, LivePitchStateId.locked);
   });
 
+  test('QA-G-02 confidence override breaks lock immediately', () {
+    final engine = TrainingEngine(config: const ExerciseConfig(countdownMs: 0));
+    engine.onIntent(TrainingIntent.start);
+
+    final harness = ReplayHarness(engine);
+    // Low-confidence sustained for ~500 ms (500–1000 ms) to match spec QA-G-02.
+    final frames = <DspFrame>[
+      frame(0, cents: 2, confidence: 0.92),
+      frame(160, cents: 1, confidence: 0.92),
+      frame(340, cents: 1, confidence: 0.92),
+      frame(500, cents: 0, confidence: 0.55),
+      frame(600, cents: 0, confidence: 0.55),
+      frame(700, cents: 0, confidence: 0.55),
+      frame(800, cents: 0, confidence: 0.55),
+      frame(900, cents: 0, confidence: 0.55),
+      frame(1000, cents: 0, confidence: 0.55),
+    ];
+    final result = harness.runFrames(frames);
+
+    expect(result.visited(LivePitchStateId.locked), isTrue);
+    expect(result.finalState.id, LivePitchStateId.lowConfidence);
+    expect(result.finalState.haloIntensity, 0);
+    expect(result.finalState.errorReadoutVisible, isFalse);
+  });
+
+  test('QA-VB-01 valid vibrato keeps lock and averages effective error', () {
+    final engine = TrainingEngine(config: const ExerciseConfig(countdownMs: 0));
+    engine.onIntent(TrainingIntent.start);
+
+    DspFrame vibratoFrame(int ts, double cents) => DspFrame(
+          timestampMs: ts,
+          freqHz: 440,
+          midiFloat: 69,
+          nearestMidi: 69,
+          centsError: cents,
+          confidence: 0.9,
+          vibrato: const VibratoInfo(detected: true, rateHz: 6, depthCents: 25),
+        );
+
+    final frames = <DspFrame>[
+      vibratoFrame(0, -25),
+      vibratoFrame(120, 25),
+      vibratoFrame(240, -25),
+      vibratoFrame(360, 25),
+      vibratoFrame(820, -25),
+      vibratoFrame(950, 25),
+      vibratoFrame(1100, -25),
+    ];
+
+    final result = ReplayHarness(engine).runFrames(frames);
+    expect(result.visited(LivePitchStateId.locked), isTrue);
+    expect(result.finalState.id, LivePitchStateId.locked);
+    expect(result.finalState.effectiveError!.abs(), lessThanOrEqualTo(10));
+  });
+
+  test('QA-VB-02 excessive vibrato depth is treated as pitch error', () {
+    final engine = TrainingEngine(
+      config: const ExerciseConfig(
+        countdownMs: 0,
+        driftAwarenessMode: true,
+        driftThresholdCents: 30,
+      ),
+    );
+    engine.onIntent(TrainingIntent.start);
+
+    DspFrame deepVibratoFrame(int ts, double cents) => DspFrame(
+          timestampMs: ts,
+          freqHz: 440,
+          midiFloat: 69,
+          nearestMidi: 69,
+          centsError: cents,
+          confidence: 0.9,
+          vibrato: const VibratoInfo(detected: true, rateHz: 6, depthCents: 45),
+        );
+
+    final frames = <DspFrame>[
+      frame(0, cents: 4),
+      frame(160, cents: 3),
+      frame(340, cents: 2),
+      deepVibratoFrame(900, 40),
+      deepVibratoFrame(1020, 40),
+      deepVibratoFrame(1160, 40),
+      deepVibratoFrame(1320, 40),
+    ];
+
+    final result = ReplayHarness(engine).runFrames(frames);
+    expect(result.visited(LivePitchStateId.driftCandidate), isTrue);
+    expect(result.finalState.id, LivePitchStateId.driftConfirmed);
+  });
+
+  test('QA-VD-01 cents to pixel mapping uses semitone width constant', () {
+    final engine = TrainingEngine(config: const ExerciseConfig(countdownMs: 0));
+    engine.onIntent(TrainingIntent.start);
+
+    final result = ReplayHarness(engine).runFrames([
+      frame(0, cents: 50),
+    ]);
+
+    expect(
+      result.finalState.xOffsetPx,
+      closeTo(0.5 * PtConstants.semitoneWidthPx, 0.0001),
+    );
+  });
+
+  test('QA-VD-02 deformation hits max at drift threshold', () {
+    const driftThreshold = 30.0;
+    final engine = TrainingEngine(
+      config: const ExerciseConfig(
+        countdownMs: 0,
+        driftThresholdCents: driftThreshold,
+      ),
+    );
+    engine.onIntent(TrainingIntent.start);
+
+    final result = ReplayHarness(engine).runFrames([
+      frame(0, cents: driftThreshold),
+    ]);
+
+    expect(result.finalState.deformPx, closeTo(PtConstants.maxDeformPx, 0.0001));
+    expect(result.finalState.errorFactorE, closeTo(1.0, 0.0001));
+  });
+
   test('replay parser loads jsonl traces', () {
     final trace = File('../../qa/traces/sample_trace.jsonl').readAsStringSync();
     final frames = ReplayHarness.parseJsonl(trace);
