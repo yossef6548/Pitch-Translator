@@ -53,7 +53,6 @@ void main() {
         _StringEventHandler('not-a-map'),
       );
 
-
       const controlChannel = MethodChannel('pt/audio/control/test');
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(controlChannel, (call) async {
