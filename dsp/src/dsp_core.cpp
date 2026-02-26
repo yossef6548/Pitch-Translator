@@ -10,6 +10,7 @@ constexpr int kMaxProcessSamples = 4096;
 constexpr int kMinFreqHz = 80;
 constexpr int kMaxFreqHz = 1100;
 constexpr int kHistorySize = 64;
+constexpr double kYinThreshold = 0.12;
 
 inline double hz_to_midi(double hz, double a4_hz) {
     return 69.0 + 12.0 * std::log2(hz / a4_hz);
@@ -31,7 +32,33 @@ struct PT_DSP {
     std::array<double, kHistorySize> recent_time_ms{};
     int history_count = 0;
     int history_head = 0;
+    std::array<double, kHistorySize> recent_freq_hz{};
 };
+
+namespace {
+inline int wrap_history_index(int head, int offset_from_oldest, int count) {
+    const int oldest = (head - count + kHistorySize) % kHistorySize;
+    return (oldest + offset_from_oldest) % kHistorySize;
+}
+
+double parabolic_lag_refine(const std::array<double, kMaxProcessSamples>& cmndf,
+                            int lag,
+                            int max_lag) {
+    if (lag <= 1 || lag >= max_lag - 1) {
+        return static_cast<double>(lag);
+    }
+
+    const double y0 = cmndf[lag - 1];
+    const double y1 = cmndf[lag];
+    const double y2 = cmndf[lag + 1];
+    const double denom = 2.0 * (2.0 * y1 - y0 - y2);
+    if (std::abs(denom) < 1e-12) {
+        return static_cast<double>(lag);
+    }
+    const double delta = (y0 - y2) / denom;
+    return static_cast<double>(lag) + std::clamp(delta, -0.5, 0.5);
+}
+}  // namespace
 
 PT_DSP* pt_dsp_create(DSPConfig cfg) {
     PT_DSP* p = new (std::nothrow) PT_DSP();
@@ -89,25 +116,53 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
         return out;
     }
 
-    double best_corr = -1e30;
-    int best_lag = -1;
+    std::array<double, kMaxProcessSamples> diff{};
+    std::array<double, kMaxProcessSamples> cmndf{};
+
     for (int lag = min_lag; lag <= max_lag; ++lag) {
-        double corr = 0.0;
+        double d = 0.0;
         for (int i = 0; i < n - lag; ++i) {
-            corr += centered[i] * centered[i + lag];
+            const double delta = centered[i] - centered[i + lag];
+            d += delta * delta;
         }
-        if (corr > best_corr) {
-            best_corr = corr;
+        diff[lag] = d;
+    }
+
+    cmndf[min_lag] = 1.0;
+    double running_sum = 0.0;
+    for (int lag = min_lag + 1; lag <= max_lag; ++lag) {
+        running_sum += diff[lag];
+        if (running_sum <= 1e-12) {
+            cmndf[lag] = 1.0;
+            continue;
+        }
+        cmndf[lag] = diff[lag] * static_cast<double>(lag - min_lag) / running_sum;
+    }
+
+    int best_lag = -1;
+    double best_cmndf = 1.0;
+    for (int lag = min_lag + 1; lag <= max_lag; ++lag) {
+        const double v = cmndf[lag];
+        if (v < kYinThreshold) {
+            best_lag = lag;
+            while (best_lag + 1 <= max_lag && cmndf[best_lag + 1] < cmndf[best_lag]) {
+                ++best_lag;
+            }
+            best_cmndf = cmndf[best_lag];
+            break;
+        }
+        if (v < best_cmndf) {
+            best_cmndf = v;
             best_lag = lag;
         }
     }
-
     if (best_lag <= 0) {
         dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
         return out;
     }
 
-    const double freq = static_cast<double>(sample_rate) / static_cast<double>(best_lag);
+    const double refined_lag = parabolic_lag_refine(cmndf, best_lag, max_lag);
+    const double freq = static_cast<double>(sample_rate) / refined_lag;
     if (!is_finite_positive(freq)) {
         dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
         return out;
@@ -117,7 +172,34 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
     const int nearest_midi = static_cast<int>(std::llround(midi_float));
     const double nearest_hz = midi_to_hz(nearest_midi, dsp->cfg.a4_hz > 0 ? dsp->cfg.a4_hz : 440.0);
     const double cents_error = 1200.0 * std::log2(freq / nearest_hz);
-    const double confidence = std::clamp(best_corr / energy, 0.0, 1.0);
+    const double periodicity_confidence = std::clamp(1.0 - best_cmndf, 0.0, 1.0);
+
+    double stability_confidence = 1.0;
+    if (dsp->history_count >= 4) {
+        double sum = 0.0;
+        int samples = 0;
+        for (int i = 0; i < dsp->history_count; ++i) {
+            const int idx = wrap_history_index(dsp->history_head, i, dsp->history_count);
+            if (dsp->recent_freq_hz[idx] > 0.0) {
+                sum += dsp->recent_freq_hz[idx];
+                ++samples;
+            }
+        }
+        if (samples > 0) {
+            const double mean_freq = sum / static_cast<double>(samples);
+            double variance = 0.0;
+            for (int i = 0; i < dsp->history_count; ++i) {
+                const int idx = wrap_history_index(dsp->history_head, i, dsp->history_count);
+                const double f = dsp->recent_freq_hz[idx];
+                if (f <= 0.0) continue;
+                const double cents_delta = 1200.0 * std::log2(f / mean_freq);
+                variance += cents_delta * cents_delta;
+            }
+            const double rms_cents = std::sqrt(variance / static_cast<double>(samples));
+            stability_confidence = std::clamp(1.0 - (rms_cents / 45.0), 0.0, 1.0);
+        }
+    }
+    const double confidence = periodicity_confidence * 0.7 + stability_confidence * 0.3;
 
     out.freq_hz = freq;
     out.midi_float = midi_float;
@@ -128,6 +210,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
     if (std::isfinite(cents_error)) {
         dsp->recent_cents[dsp->history_head] = cents_error;
         dsp->recent_time_ms[dsp->history_head] = out.timestamp_ms;
+        dsp->recent_freq_hz[dsp->history_head] = freq;
         dsp->history_head = (dsp->history_head + 1) % kHistorySize;
         dsp->history_count = std::min(kHistorySize, dsp->history_count + 1);
     }
