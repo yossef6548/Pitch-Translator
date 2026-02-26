@@ -73,21 +73,25 @@ ScenarioResult runScenario(const std::string& name, double hz, bool vibrato, boo
 
   for (size_t i = 0; i + kHop <= voiced.size(); i += kHop) {
     auto frame = pt_dsp_process(dsp, voiced.data() + i, kHop);
-    if (std::isfinite(frame.freq_hz)) {
+    if (std::isfinite(frame.freq_hz) && frame.freq_hz > 0.0) {
       const double cents = 1200.0 * std::log2(frame.freq_hz / hz);
       centsSum += std::abs(cents);
       ++centsCount;
     }
-    voicedConfSum += frame.confidence;
-    ++voicedConfCount;
+    if (std::isfinite(frame.confidence)) {
+      voicedConfSum += frame.confidence;
+      ++voicedConfCount;
+    }
   }
 
   double unvoicedConfSum = 0.0;
   int unvoicedConfCount = 0;
   for (size_t i = 0; i + kHop <= silence.size(); i += kHop) {
     auto frame = pt_dsp_process(dsp, silence.data() + i, kHop);
-    unvoicedConfSum += frame.confidence;
-    ++unvoicedConfCount;
+    if (std::isfinite(frame.confidence)) {
+      unvoicedConfSum += frame.confidence;
+      ++unvoicedConfCount;
+    }
   }
 
   pt_dsp_destroy(dsp);

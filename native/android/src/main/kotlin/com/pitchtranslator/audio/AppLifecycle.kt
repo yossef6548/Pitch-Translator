@@ -3,18 +3,21 @@ package com.pitchtranslator.audio
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import androidx.lifecycle.LifecycleOwner
 
 class AppLifecycle(private val plugin: PitchTranslatorAudioPlugin) : Application.ActivityLifecycleCallbacks {
   override fun onActivityPaused(activity: Activity) {
-    plugin.onPause(object : androidx.lifecycle.LifecycleOwner {
-      override val lifecycle = androidx.lifecycle.LifecycleRegistry(this)
-    })
+    val owner = activity as? LifecycleOwner
+    if (owner != null) {
+      plugin.onPause(owner)
+    }
   }
 
   override fun onActivityResumed(activity: Activity) {
-    plugin.onResume(object : androidx.lifecycle.LifecycleOwner {
-      override val lifecycle = androidx.lifecycle.LifecycleRegistry(this)
-    })
+    val owner = activity as? LifecycleOwner
+    if (owner != null) {
+      plugin.onResume(owner)
+    }
   }
 
   override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit

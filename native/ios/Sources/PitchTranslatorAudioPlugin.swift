@@ -1,6 +1,7 @@
 import AVFoundation
 import Flutter
 import Foundation
+import UIKit
 
 final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private static let frameChannelName = "pt/audio/frames"
@@ -12,7 +13,7 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
   private let emitQueue = DispatchQueue(label: "pt.audio.ios.emit")
 
   private var eventSink: FlutterEventSink?
-  private var dspHandle: OpaquePointer?
+  private var dspHandle: UnsafeMutableRawPointer?
   private var isRunning = false
   private var sampleRate: Int32 = 48_000
   private var hopSize: Int32 = 256
@@ -80,30 +81,51 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
   }
 
   private func startCapture() throws {
-    if isRunning { return }
+    var capturedError: Error?
 
-    try session.setCategory(.playAndRecord, mode: .measurement, options: [.mixWithOthers, .allowBluetooth])
-    try session.setPreferredIOBufferDuration(0.005)
-    try session.setPreferredSampleRate(48_000)
-    try session.setActive(true, options: .notifyOthersOnDeactivation)
+    stateQueue.sync {
+      if self.isRunning { return }
 
-    let format = engine.inputNode.inputFormat(forBus: 0)
-    sampleRate = Int32(format.sampleRate)
-    hopSize = 256
+      do {
+        try self.session.setCategory(.playAndRecord, mode: .measurement, options: [.mixWithOthers, .allowBluetooth])
+        try self.session.setPreferredIOBufferDuration(0.005)
+        try self.session.setPreferredSampleRate(48_000)
+        try self.session.setActive(true, options: .notifyOthersOnDeactivation)
 
-    dspHandle = pt_dsp_make(sampleRate, hopSize)
-    guard dspHandle != nil else {
-      throw NSError(domain: "pt.audio", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to initialize DSP handle"])
+        let format = self.engine.inputNode.inputFormat(forBus: 0)
+        self.sampleRate = Int32(format.sampleRate)
+        self.hopSize = 256
+
+        self.dspHandle = pt_dsp_make(self.sampleRate, self.hopSize)
+        guard self.dspHandle != nil else {
+          capturedError = NSError(
+            domain: "pt.audio",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Failed to initialize DSP handle"]
+          )
+          return
+        }
+
+        self.engine.inputNode.removeTap(onBus: 0)
+        self.engine.inputNode.installTap(
+          onBus: 0,
+          bufferSize: AVAudioFrameCount(self.hopSize),
+          format: format
+        ) { [weak self] buffer, _ in
+          self?.processAudio(buffer: buffer)
+        }
+
+        self.engine.prepare()
+        try self.engine.start()
+        self.isRunning = true
+      } catch {
+        capturedError = error
+      }
     }
 
-    engine.inputNode.removeTap(onBus: 0)
-    engine.inputNode.installTap(onBus: 0, bufferSize: AVAudioFrameCount(hopSize), format: format) { [weak self] buffer, _ in
-      self?.processAudio(buffer: buffer)
+    if let error = capturedError {
+      throw error
     }
-
-    engine.prepare()
-    try engine.start()
-    isRunning = true
   }
 
   private func stopCapture() {
@@ -111,8 +133,10 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
       guard isRunning else { return }
       engine.inputNode.removeTap(onBus: 0)
       engine.stop()
-      pt_dsp_free(dspHandle)
-      dspHandle = nil
+      if let handle = dspHandle {
+        pt_dsp_free(handle)
+        dspHandle = nil
+      }
       try? session.setActive(false, options: .notifyOthersOnDeactivation)
       isRunning = false
     }
@@ -169,7 +193,7 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
   }
 
   @objc private func onForeground() {
-    if isRunning {
+    if !isRunning {
       try? startCapture()
     }
   }
