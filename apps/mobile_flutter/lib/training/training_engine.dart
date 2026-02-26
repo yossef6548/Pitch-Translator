@@ -129,8 +129,10 @@ class TrainingEngine {
           }
         }
       }
+
     } else if (prior == LivePitchStateId.driftConfirmed &&
-        _config.driftAwarenessMode) {
+        _config.driftAwarenessMode &&
+        absEffectiveError <= _config.toleranceCents) {
       next = LivePitchStateId.seekingLock;
       _outsideDriftMs = 0;
       _withinToleranceMs = 0;
@@ -240,8 +242,12 @@ class TrainingEngine {
     final absError = effectiveError!.abs();
     final e = (absError / _config.driftThresholdCents).clamp(0.0, 1.0);
     final d = centsError == 0 ? 0 : (centsError > 0 ? 1 : -1);
-    final xOffset = (centsError / 100.0) * PtConstants.semitoneWidthPx;
-    final deform = e * PtConstants.maxDeformPx;
+    final shouldRenderRigid =
+        next == LivePitchStateId.locked && absError <= _config.toleranceCents;
+    final xOffset = shouldRenderRigid
+        ? 0.0
+        : (centsError / 100.0) * PtConstants.semitoneWidthPx;
+    final deform = shouldRenderRigid ? 0.0 : e * PtConstants.maxDeformPx;
 
     var saturation = 1.0 - (e * 0.6);
     if (next == LivePitchStateId.locked)

@@ -91,7 +91,8 @@ void main() {
           home: Scaffold(body: DriftReplaySheet(event: event)),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
 
       expect(
         find.text('Snippet frames unavailable for frame-by-frame replay.'),
@@ -113,7 +114,8 @@ void main() {
           home: Scaffold(body: DriftReplaySheet(event: event)),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
 
       expect(
         find.text('Snippet frames unavailable for frame-by-frame replay.'),
@@ -161,7 +163,8 @@ void main() {
           home: Scaffold(body: DriftReplaySheet(event: event)),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
 
       // Verify frame count and window are displayed
       expect(
@@ -196,7 +199,8 @@ void main() {
           home: Scaffold(body: DriftReplaySheet(event: event)),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
 
       expect(
         find.text('Snippet frames unavailable for frame-by-frame replay.'),
