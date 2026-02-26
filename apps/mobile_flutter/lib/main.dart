@@ -289,9 +289,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.detached) {
-      unawaited(SessionRepository.instance.close());
-    }
+    // Intentionally left empty: resource cleanup is handled in dispose().
   }
 
   void _openFocusFromHome(BuildContext context) {
