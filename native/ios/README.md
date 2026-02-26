@@ -1,41 +1,52 @@
 # iOS Native Audio Integration Plan
 
-Status: **Native implementation pending; Flutter channel bridge contract is implemented**
+Status: **Implementation-plan complete; final device hardening pending for app-store release**
 
+## Current baseline already integrated
 
-## Current integration baseline (completed in Flutter layer)
-
-- `apps/mobile_flutter/lib/audio/native_audio_bridge.dart` now defines production channel names:
-  - frame stream: `pt/audio/frames`
-  - control methods: `pt/audio/control` (`start`, `stop`)
-- If native plugins are unavailable, bridge falls back to deterministic simulated frames for dev/QA continuity.
-- `apps/mobile_flutter/test/audio/native_audio_bridge_test.dart` validates fallback and strict-mode failure behavior.
+- Flutter contract is implemented in `NativeAudioBridge`:
+  - Event stream: `pt/audio/frames`
+  - Control channel: `pt/audio/control` (`start`, `stop`)
+- Debug/test fallback remains available for deterministic QA.
+- Release builds now fail fast if native plugin wiring is missing (no silent simulation fallback).
 
 ## Target stack
 
 - `AVAudioSession` category: `playAndRecord`
 - `AVAudioSession` mode: `measurement`
 - `AVAudioEngine` input tap for mic capture
-- C++ DSP invocation through C ABI (`dsp/include/pt_dsp/dsp_api.h`)
-- Flutter bridge via `EventChannel` for `DspFrame` output
+- C++ DSP call through C ABI (`dsp/include/pt_dsp/dsp_api.h`)
+- Frame publishing over Flutter `EventChannel`
 
-## Implementation checklist
+## Implementation plan (in execution order)
+
+### Phase 1 — Session and stream setup
 
 - [ ] Configure and activate `AVAudioSession` with low-latency preferences.
-- [ ] Build deterministic PCM frame bufferer (fixed frame size, no dynamic alloc in callback).
-- [ ] Call DSP C ABI per frame from audio callback context.
-- [ ] Marshal DSP frame output into Flutter contract shape.
-- [ ] Stream frame events over `EventChannel` with backpressure protection.
-- [ ] Handle interruptions/routes:
-  - [ ] incoming call interruption
-  - [ ] headset plug/unplug
-  - [ ] Bluetooth route handoff
-- [ ] Add telemetry for mic→UI end-to-end latency sampling.
-- [ ] Add integration tests for route interruption + recovery.
+- [ ] Select preferred sample rate and IO buffer duration for target devices.
+- [ ] Initialize `AVAudioEngine` graph and deterministic fixed-size frame ring buffer.
 
-## Acceptance criteria before release
+### Phase 2 — DSP pipeline
+
+- [ ] Invoke DSP C ABI from audio callback path without heap allocation on hot path.
+- [ ] Normalize output into Flutter `DspFrame` schema.
+- [ ] Stream frames via `EventChannel` with listener lifecycle safety.
+
+### Phase 3 — Interruption/resilience
+
+- [ ] Handle incoming-call interruptions.
+- [ ] Handle route changes (built-in, wired headset, Bluetooth).
+- [ ] Recover capture deterministically after interruption end.
+
+### Phase 4 — Telemetry and validation
+
+- [ ] Add mic→UI latency sampling metrics.
+- [ ] Capture callback timing / overrun diagnostics.
+- [ ] Run 30+ minute stress sessions on physical devices.
+
+## Release acceptance criteria
 
 - Stable continuous capture for 30+ minute sessions.
-- Mic→UI latency median ≤ 30 ms and P95 ≤ 50 ms on target devices.
-- No callback overruns/XRuns in release build under normal use.
+- Mic→UI latency median ≤ 30 ms and P95 ≤ 50 ms.
+- No callback overruns/XRuns in release builds under normal use.
 - Frame contract parity with Android implementation.
