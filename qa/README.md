@@ -21,11 +21,12 @@ Latest pass updates included:
 - Drift replay widget tests were stabilized by avoiding async file writes in `testWidgets` fake-async context.
 - Library screen loading now falls back to deterministic empty-state values if repository/database access is unavailable.
 
-This validation pass additionally executed the full repository QA checklist in-container:
+This validation pass additionally executed focused in-container checks:
 
-- End-to-end Flutter test run (`flutter test`) completed with all suites green.
+- Flutter bridge regression suite (`test/audio/native_audio_bridge_test.dart`) passed.
+- Quick monitor navigation regression (`test/quick_monitor_test.dart`) passed.
 - DSP smoke compile/test cycle completed from `dsp/` CMake target.
-- Deterministic QA matrix and replay harness behavior revalidated as stable.
+- DSP voice-validation + 30-minute synthetic burn-in executable completed.
 
 
 - Replay tests (`test/qa/replay_harness_test.dart`):
@@ -76,6 +77,10 @@ flutter test test/qa/qa_matrix_test.dart
 flutter test test/qa/drift_snippet_recorder_test.dart
 flutter test test/training_engine_test.dart
 flutter test test/exercises/progression_engine_test.dart
+cmake -S dsp -B /tmp/pt-dsp-build
+cmake --build /tmp/pt-dsp-build
+/tmp/pt-dsp-build/pt_dsp_tests
+/tmp/pt-dsp-build/pt_dsp_voice_validation
 ```
 
 If `flutter` is not preinstalled in your environment:

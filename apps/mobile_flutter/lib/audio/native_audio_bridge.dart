@@ -12,11 +12,11 @@ class NativeAudioBridge {
     EventChannel? frameChannel,
     MethodChannel? controlChannel,
     bool? enableSimulationFallback,
-  }) : _frameChannel =
-           frameChannel ?? const EventChannel(_defaultFrameChannelName),
-       _controlChannel =
-           controlChannel ?? const MethodChannel(_defaultControlChannelName),
-       enableSimulationFallback = enableSimulationFallback ?? !kReleaseMode;
+  })  : _frameChannel =
+            frameChannel ?? const EventChannel(_defaultFrameChannelName),
+        _controlChannel =
+            controlChannel ?? const MethodChannel(_defaultControlChannelName),
+        enableSimulationFallback = enableSimulationFallback ?? !kReleaseMode;
 
   static const String _defaultFrameChannelName = 'pt/audio/frames';
   static const String _defaultControlChannelName = 'pt/audio/control';
@@ -30,6 +30,9 @@ class NativeAudioBridge {
 
   Stream<DspFrame>? _cachedStream;
   StreamSubscription<DspFrame>? _cachedSubscription;
+  static bool _isRunning = false;
+
+  static bool get isRunning => _isRunning;
 
   Stream<DspFrame> frames() {
     if (_cachedStream == null) {
@@ -50,19 +53,30 @@ class NativeAudioBridge {
     _cachedStream = null;
   }
 
-  Future<void> start() async {
+  Future<bool> _tryStartNative() async {
     try {
       await _controlChannel.invokeMethod<void>('start');
+      _isRunning = true;
+      return true;
     } on MissingPluginException {
       if (!enableSimulationFallback) {
         rethrow;
       }
+      return false;
+    }
+  }
+
+  Future<void> start() async {
+    final started = await _tryStartNative();
+    if (!started && !enableSimulationFallback) {
+      throw MissingPluginException('Native audio start is unavailable.');
     }
   }
 
   Future<void> stop() async {
     try {
       await _controlChannel.invokeMethod<void>('stop');
+      _isRunning = false;
     } on MissingPluginException {
       if (!enableSimulationFallback) {
         rethrow;
@@ -73,15 +87,24 @@ class NativeAudioBridge {
   Stream<DspFrame> _createFrameStream() async* {
     if (enableSimulationFallback) {
       try {
-        await _controlChannel.invokeMethod<void>('start');
-        yield* _nativeFrameStream();
+        final started = await _tryStartNative();
+        if (started) {
+          yield* _nativeFrameStream();
+        } else {
+          yield* _simulatedFrames();
+        }
       } on MissingPluginException {
         yield* _simulatedFrames();
       }
       return;
     }
 
-    await _controlChannel.invokeMethod<void>('start');
+    final started = await _tryStartNative();
+    if (!started) {
+      throw MissingPluginException(
+        'Native audio start is unavailable and simulation fallback is disabled.',
+      );
+    }
     yield* _nativeFrameStream();
   }
 

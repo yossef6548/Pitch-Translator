@@ -273,6 +273,8 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _index = 0;
+  final _lifecycleAudioBridge = NativeAudioBridge();
+  bool _restartMicOnResume = false;
 
   @override
   void initState() {
@@ -289,7 +291,26 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Intentionally left empty: resource cleanup is handled in dispose().
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _restartMicOnResume = NativeAudioBridge.isRunning;
+      unawaited(_lifecycleAudioBridge.stop());
+      unawaited(SessionRepository.instance.close());
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      if (_restartMicOnResume) {
+        _restartMicOnResume = false;
+        unawaited(_lifecycleAudioBridge.start());
+      }
+      return;
+    }
+
+    if (state == AppLifecycleState.detached) {
+      unawaited(_lifecycleAudioBridge.stop());
+      unawaited(SessionRepository.instance.close());
+    }
   }
 
   void _openFocusFromHome(BuildContext context) {
@@ -505,8 +526,8 @@ class HomeTodayScreen extends StatelessWidget {
                 final subtitle = trend == null || trend.sampleSize == 0
                     ? 'No completed sessions yet. Start a drill to populate analytics.'
                     : 'Avg Error: ${trend.avgErrorCents.toStringAsFixed(1)}c • '
-                          'Stability: ${trend.stabilityScore.toStringAsFixed(1)} • '
-                          'Drift/Session: ${trend.driftPerSession.toStringAsFixed(2)}';
+                        'Stability: ${trend.stabilityScore.toStringAsFixed(1)} • '
+                        'Drift/Session: ${trend.driftPerSession.toStringAsFixed(2)}';
                 return ListTile(
                   title: const Text('Progress Snapshot'),
                   subtitle: Text(subtitle),
@@ -1130,8 +1151,7 @@ class AnalyzeOverviewScreen extends StatelessWidget {
                               FutureBuilder<List<ModeLevelPercentile>>(
                                 future: percentilesFuture,
                                 builder: (context, percentileSnapshot) {
-                                  final percentiles =
-                                      percentileSnapshot.data ??
+                                  final percentiles = percentileSnapshot.data ??
                                       const <ModeLevelPercentile>[];
                                   if (percentiles.isEmpty) {
                                     return const ListTile(
@@ -1393,9 +1413,8 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
     final beforeCents = widget.event.beforeCents;
     final afterCents = widget.event.afterCents;
     final hasData = beforeCents != null && afterCents != null;
-    final liveCents = hasData
-        ? beforeCents + ((afterCents - beforeCents) * _progress)
-        : null;
+    final liveCents =
+        hasData ? beforeCents + ((afterCents - beforeCents) * _progress) : null;
     final delta = hasData ? afterCents - beforeCents : null;
 
     return Padding(
@@ -1577,9 +1596,8 @@ class _WeaknessMapGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxError = cells
-        .map((c) => c.avgErrorCents)
-        .fold<double>(0, math.max);
+    final maxError =
+        cells.map((c) => c.avgErrorCents).fold<double>(0, math.max);
     return GridView.builder(
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -1647,11 +1665,10 @@ class _SessionTimeline extends StatelessWidget {
             ),
             for (final event in driftEvents)
               Positioned(
-                left:
-                    ((event.confirmedAtMs - session.startedAtMs) /
-                            session.durationMs *
-                            constraints.maxWidth)
-                        .clamp(0, constraints.maxWidth - 10),
+                left: ((event.confirmedAtMs - session.startedAtMs) /
+                        session.durationMs *
+                        constraints.maxWidth)
+                    .clamp(0, constraints.maxWidth - 10),
                 top: 20,
                 child: const Icon(
                   Icons.location_on,
@@ -1762,8 +1779,8 @@ class LibraryScreen extends StatelessWidget {
   Future<_LibraryViewData> _loadLibraryViewData() async {
     try {
       final counts = await SessionRepository.instance.libraryCounts();
-      final recentDriftEvents = await SessionRepository.instance
-          .recentDriftEvents(limit: 10);
+      final recentDriftEvents =
+          await SessionRepository.instance.recentDriftEvents(limit: 10);
       return _LibraryViewData(
         counts: counts,
         recentDriftEvents: recentDriftEvents,
@@ -1877,7 +1894,8 @@ class LivePitchScreen extends StatefulWidget {
   State<LivePitchScreen> createState() => _LivePitchScreenState();
 }
 
-class _LivePitchScreenState extends State<LivePitchScreen> {
+class _LivePitchScreenState extends State<LivePitchScreen>
+    with WidgetsBindingObserver {
   late final TrainingEngine _engine;
   final _bridge = NativeAudioBridge();
   StreamSubscription<DspFrame>? _sub;
@@ -1897,13 +1915,13 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _engine = TrainingEngine(config: widget.config);
     _sub = _bridge.frames().listen((frame) {
       setState(() => _engine.onDspFrame(frame));
       _snippetRecorder.addFrame(frame);
       final stateId = _engine.state.id;
-      final isTrainingActive =
-          stateId != LivePitchStateId.idle &&
+      final isTrainingActive = stateId != LivePitchStateId.idle &&
           stateId != LivePitchStateId.paused &&
           stateId != LivePitchStateId.completed;
       if (_sessionStartMs != null && isTrainingActive) {
@@ -1957,6 +1975,15 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
         _openReplay();
       }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      unawaited(_bridge.stop());
+    }
   }
 
   Future<void> _persistDriftSnippet({required int eventIndex}) async {
@@ -2048,8 +2075,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     final avgError = _absErrors.reduce((a, b) => a + b) / _absErrors.length;
     final signedMean =
         _effectiveErrors.reduce((a, b) => a + b) / _effectiveErrors.length;
-    final variance =
-        _effectiveErrors
+    final variance = _effectiveErrors
             .map((e) => (e - signedMean) * (e - signedMean))
             .reduce((a, b) => a + b) /
         _effectiveErrors.length;
@@ -2057,8 +2083,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     final stability = (100 - (stdDev * 3)).clamp(0, 100).toDouble();
     final lockRatio = _activeTimeMs == 0 ? 0 : _lockedTimeMs / _activeTimeMs;
     final masteryThreshold = masteryThresholds[widget.level]!;
-    final success =
-        avgError <= masteryThreshold.avgErrorMax &&
+    final success = avgError <= masteryThreshold.avgErrorMax &&
         stdDev <= masteryThreshold.stabilityMax &&
         lockRatio >= masteryThreshold.lockRatioMin &&
         _driftCount <= masteryThreshold.driftCountMax;
@@ -2108,6 +2133,8 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
   @override
   void dispose() {
     _persistSessionIfNeeded();
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_bridge.stop());
     _sub?.cancel();
     super.dispose();
   }
@@ -2150,6 +2177,7 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
               children: [
                 ElevatedButton(
                   onPressed: () => setState(() {
+                    unawaited(_bridge.start());
                     if (_sessionStartMs == null) {
                       _sessionStartMs = DateTime.now().millisecondsSinceEpoch;
                       _absErrors.clear();
@@ -2166,17 +2194,22 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
                   child: const Text('Start'),
                 ),
                 ElevatedButton(
-                  onPressed: () =>
-                      setState(() => _engine.onIntent(TrainingIntent.pause)),
+                  onPressed: () => setState(() {
+                    unawaited(_bridge.stop());
+                    _engine.onIntent(TrainingIntent.pause);
+                  }),
                   child: const Text('Pause'),
                 ),
                 ElevatedButton(
-                  onPressed: () =>
-                      setState(() => _engine.onIntent(TrainingIntent.resume)),
+                  onPressed: () => setState(() {
+                    unawaited(_bridge.start());
+                    _engine.onIntent(TrainingIntent.resume);
+                  }),
                   child: const Text('Resume'),
                 ),
                 ElevatedButton(
                   onPressed: () async {
+                    await _bridge.stop();
                     setState(() => _engine.onIntent(TrainingIntent.stop));
                     await _persistSessionIfNeeded();
                   },

@@ -15,3 +15,8 @@ add_executable(pt_dsp_tests
     tests/test_smoke.cpp
 )
 target_link_libraries(pt_dsp_tests PRIVATE pt_dsp)
+
+add_executable(pt_dsp_voice_validation
+    tests/voice_validation.cpp
+)
+target_link_libraries(pt_dsp_voice_validation PRIVATE pt_dsp)
