@@ -1,0 +1,3 @@
+# CodeQL analysis artifacts
+_codeql_detected_source_root
+dsp/_codeql_build_dir/
