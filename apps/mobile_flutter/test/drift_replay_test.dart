@@ -127,7 +127,7 @@ void main() {
         'parses snake_case JSON fields and displays frame count and telemetry',
         (tester) async {
       final snippetFile = File('${tempDir.path}/snippet_0.json');
-      await snippetFile.writeAsString(jsonEncode({
+      snippetFile.writeAsStringSync(jsonEncode({
         'sessionStartMs': 500,
         'eventIndex': 0,
         'frameCount': 2,
@@ -180,7 +180,7 @@ void main() {
     testWidgets('renders empty when frames list in JSON is empty',
         (tester) async {
       final snippetFile = File('${tempDir.path}/snippet_empty.json');
-      await snippetFile.writeAsString(jsonEncode({
+      snippetFile.writeAsStringSync(jsonEncode({
         'sessionStartMs': 500,
         'eventIndex': 0,
         'frameCount': 0,

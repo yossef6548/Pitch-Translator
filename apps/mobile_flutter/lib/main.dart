@@ -1327,15 +1327,30 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
       return const <_SnippetReplayFrame>[];
     }
     final file = File(uri);
-    final exists = await file.exists().timeout(const Duration(milliseconds: 250), onTimeout: () => false);
-    if (!exists) {
+    if (!file.existsSync()) {
       return const <_SnippetReplayFrame>[];
     }
-    final rawJson = await file.readAsString().timeout(const Duration(milliseconds: 250), onTimeout: () => "");
+
+    final rawJson = () {
+      try {
+        return file.readAsStringSync();
+      } catch (_) {
+        return '';
+      }
+    }();
+
     if (rawJson.isEmpty) {
       return const <_SnippetReplayFrame>[];
     }
-    final decoded = jsonDecode(rawJson);
+
+    final decoded = () {
+      try {
+        return jsonDecode(rawJson);
+      } catch (_) {
+        return null;
+      }
+    }();
+
     if (decoded is! Map<String, dynamic>) {
       return const <_SnippetReplayFrame>[];
     }
@@ -1725,16 +1740,26 @@ class LibraryScreen extends StatelessWidget {
   }
 
   Future<_LibraryViewData> _loadLibraryViewData() async {
-    final countsFuture = SessionRepository.instance.libraryCounts();
-    final driftsFuture = SessionRepository.instance.recentDriftEvents(
-      limit: 10,
-    );
-    final counts = await countsFuture;
-    final recentDriftEvents = await driftsFuture;
-    return _LibraryViewData(
-      counts: counts,
-      recentDriftEvents: recentDriftEvents,
-    );
+    try {
+      final counts = await SessionRepository.instance.libraryCounts();
+      final recentDriftEvents =
+          await SessionRepository.instance.recentDriftEvents(
+        limit: 10,
+      );
+      return _LibraryViewData(
+        counts: counts,
+        recentDriftEvents: recentDriftEvents,
+      );
+    } catch (_) {
+      return const _LibraryViewData(
+        counts: <String, int>{
+          'reference_tones': 0,
+          'mastered_entries': 0,
+          'drift_replays': 0,
+        },
+        recentDriftEvents: <DriftEventWithSessionRecord>[],
+      );
+    }
   }
 }
 

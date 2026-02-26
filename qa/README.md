@@ -18,6 +18,8 @@ Latest pass updates included:
 - Drift-awareness recovery behavior now matches QA-DA expectations (confirm persists until real recovery input).
 - Locked-state visual rigidity (within tolerance) is enforced by QA matrix tests.
 - Drift snippet replay file loading now uses bounded file IO to avoid unresolved async waits in edge-path tests.
+- Drift replay widget tests were stabilized by avoiding async file writes in `testWidgets` fake-async context.
+- Library screen loading now falls back to deterministic empty-state values if repository/database access is unavailable.
 
 
 - Replay tests (`test/qa/replay_harness_test.dart`):
