@@ -58,6 +58,12 @@ Why this matters:
 - QA README expanded with this pass's behavior fixes and verification guidance.
 - iOS/Android READMEs remain the source of truth for remaining device hardening before app-store binaries.
 
+## 4) Test-lab stabilization fixes completed in this pass
+
+- Drift replay widget tests now use synchronous snippet-fixture writing so deterministic widget tests do not stall under Flutter's fake-async harness.
+- Library loading now degrades safely to empty-state metrics if storage/database plumbing is unavailable (test or bootstrap edge environments), preserving screen availability.
+- Full Flutter test suite and required QA-targeted suites were re-run successfully after these fixes.
+
 ---
 
 # Repository structure
@@ -87,6 +93,8 @@ From `apps/mobile_flutter`:
 ```bash
 flutter test
 ```
+
+Use a local Flutter SDK on PATH (or `/opt/flutter/bin/flutter` in CI/containerized environments).
 
 Minimum required suites:
 
