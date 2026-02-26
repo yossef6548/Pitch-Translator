@@ -271,8 +271,26 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(SessionRepository.instance.close());
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Intentionally left empty: resource cleanup is handled in dispose().
+  }
 
   void _openFocusFromHome(BuildContext context) {
     final focusExercise = ExerciseCatalog.byId('DA_2');
@@ -487,8 +505,8 @@ class HomeTodayScreen extends StatelessWidget {
                 final subtitle = trend == null || trend.sampleSize == 0
                     ? 'No completed sessions yet. Start a drill to populate analytics.'
                     : 'Avg Error: ${trend.avgErrorCents.toStringAsFixed(1)}c • '
-                        'Stability: ${trend.stabilityScore.toStringAsFixed(1)} • '
-                        'Drift/Session: ${trend.driftPerSession.toStringAsFixed(2)}';
+                          'Stability: ${trend.stabilityScore.toStringAsFixed(1)} • '
+                          'Drift/Session: ${trend.driftPerSession.toStringAsFixed(2)}';
                 return ListTile(
                   title: const Text('Progress Snapshot'),
                   subtitle: Text(subtitle),
@@ -1112,7 +1130,8 @@ class AnalyzeOverviewScreen extends StatelessWidget {
                               FutureBuilder<List<ModeLevelPercentile>>(
                                 future: percentilesFuture,
                                 builder: (context, percentileSnapshot) {
-                                  final percentiles = percentileSnapshot.data ??
+                                  final percentiles =
+                                      percentileSnapshot.data ??
                                       const <ModeLevelPercentile>[];
                                   if (percentiles.isEmpty) {
                                     return const ListTile(
@@ -1374,8 +1393,9 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
     final beforeCents = widget.event.beforeCents;
     final afterCents = widget.event.afterCents;
     final hasData = beforeCents != null && afterCents != null;
-    final liveCents =
-        hasData ? beforeCents + ((afterCents - beforeCents) * _progress) : null;
+    final liveCents = hasData
+        ? beforeCents + ((afterCents - beforeCents) * _progress)
+        : null;
     final delta = hasData ? afterCents - beforeCents : null;
 
     return Padding(
@@ -1557,8 +1577,9 @@ class _WeaknessMapGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxError =
-        cells.map((c) => c.avgErrorCents).fold<double>(0, math.max);
+    final maxError = cells
+        .map((c) => c.avgErrorCents)
+        .fold<double>(0, math.max);
     return GridView.builder(
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -1626,10 +1647,11 @@ class _SessionTimeline extends StatelessWidget {
             ),
             for (final event in driftEvents)
               Positioned(
-                left: ((event.confirmedAtMs - session.startedAtMs) /
-                        session.durationMs *
-                        constraints.maxWidth)
-                    .clamp(0, constraints.maxWidth - 10),
+                left:
+                    ((event.confirmedAtMs - session.startedAtMs) /
+                            session.durationMs *
+                            constraints.maxWidth)
+                        .clamp(0, constraints.maxWidth - 10),
                 top: 20,
                 child: const Icon(
                   Icons.location_on,
@@ -1740,10 +1762,8 @@ class LibraryScreen extends StatelessWidget {
   Future<_LibraryViewData> _loadLibraryViewData() async {
     try {
       final counts = await SessionRepository.instance.libraryCounts();
-      final recentDriftEvents =
-          await SessionRepository.instance.recentDriftEvents(
-        limit: 10,
-      );
+      final recentDriftEvents = await SessionRepository.instance
+          .recentDriftEvents(limit: 10);
       return _LibraryViewData(
         counts: counts,
         recentDriftEvents: recentDriftEvents,
@@ -1882,7 +1902,8 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
       setState(() => _engine.onDspFrame(frame));
       _snippetRecorder.addFrame(frame);
       final stateId = _engine.state.id;
-      final isTrainingActive = stateId != LivePitchStateId.idle &&
+      final isTrainingActive =
+          stateId != LivePitchStateId.idle &&
           stateId != LivePitchStateId.paused &&
           stateId != LivePitchStateId.completed;
       if (_sessionStartMs != null && isTrainingActive) {
@@ -2027,7 +2048,8 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     final avgError = _absErrors.reduce((a, b) => a + b) / _absErrors.length;
     final signedMean =
         _effectiveErrors.reduce((a, b) => a + b) / _effectiveErrors.length;
-    final variance = _effectiveErrors
+    final variance =
+        _effectiveErrors
             .map((e) => (e - signedMean) * (e - signedMean))
             .reduce((a, b) => a + b) /
         _effectiveErrors.length;
@@ -2035,7 +2057,8 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
     final stability = (100 - (stdDev * 3)).clamp(0, 100).toDouble();
     final lockRatio = _activeTimeMs == 0 ? 0 : _lockedTimeMs / _activeTimeMs;
     final masteryThreshold = masteryThresholds[widget.level]!;
-    final success = avgError <= masteryThreshold.avgErrorMax &&
+    final success =
+        avgError <= masteryThreshold.avgErrorMax &&
         stdDev <= masteryThreshold.stabilityMax &&
         lockRatio >= masteryThreshold.lockRatioMin &&
         _driftCount <= masteryThreshold.driftCountMax;

@@ -185,6 +185,14 @@ class SessionRepository {
 
   Database? _db;
 
+  Future<void> close() async {
+    final db = _db;
+    _db = null;
+    if (db != null && db.isOpen) {
+      await db.close();
+    }
+  }
+
   Future<Database> _database() async {
     if (_db != null) return _db!;
 

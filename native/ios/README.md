@@ -63,3 +63,24 @@ Status: **Implementation-plan complete; final device hardening pending for app-s
 
 - No new native implementation code was added in this pass.
 - Flutter-layer deterministic behavior and QA coverage were revalidated; native device hardening checklist items above remain the release blocker set.
+
+
+## Progress update (current engineering pass)
+
+### Completed in this pass
+
+- [x] Hardened Flutter/native payload contract parsing in `NativeAudioBridge` so channel payload keys must exactly match `DspFrame.fromJson` expectations.
+- [x] Added no-pitch normalization at bridge boundary (`NaN`/invalid numeric values are coerced to `null`; confidence is clamped to `[0,1]`).
+- [x] Upgraded C++ DSP core from simple autocorrelation scaffold toward a YIN-style CMNDF estimator with sub-sample lag refinement and stability-weighted confidence.
+- [x] Added regression coverage for payload-schema enforcement and no-pitch normalization in Flutter tests.
+
+### Still blocked for ship gate (requires native platform code in this repo)
+
+- [ ] Implement iOS microphone capture callback path and wire real mic PCM into `pt_dsp_process`.
+- [ ] Emit native `EventChannel` frames from platform code and verify release-mode behavior on physical devices.
+- [ ] Complete interruption/route/lifecycle recovery matrix with 30+ minute burn-in runs.
+- [ ] Capture and document latency and XRuns measurements against median/P95 release targets.
+
+### Release note
+
+This repository now has stronger cross-layer contracts and DSP behavior, but it is **not app-store ship-ready** until the unchecked native platform implementation tasks above are completed and validated on-device.

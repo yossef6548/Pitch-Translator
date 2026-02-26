@@ -14,9 +14,9 @@ This monorepo includes:
 
 # Release status (ship gate)
 
-## ✅ Production-ready scope in this repository
+## ✅ Production-ready subsystems in this repository
 
-This repository is now **release-ready for the deterministic training experience**, including:
+The following subsystems are production-hardened in this repository pass, including:
 
 - Full app shell + mode flows in Flutter
 - Deterministic state machine, drift detection, and replay plumbing
@@ -39,10 +39,10 @@ Following the repository shipping checklist end-to-end, this pass completed:
 3. DSP CMake configure/build/test-smoke run with a clean temporary build directory.
 4. Readme/spec alignment review for release status and remaining native hardening boundaries.
 
-Current conclusion remains:
+Current conclusion after this pass:
 
-- **Deterministic training product in this repository is ship-ready.**
-- **App-store production binaries still require native iOS/Android hardening checklist completion on real devices.**
+- **Deterministic Flutter + contract + DSP layers are significantly hardened.**
+- **The app is not yet ship-ready for app stores because native iOS/Android microphone pipelines are still TODO in this repository and must be validated on physical devices.**
 
 ---
 
