@@ -69,7 +69,7 @@ void main() {
         enableSimulationFallback: false,
       );
 
-      expectLater(bridge.frames().first, throwsA(isA<FormatException>()));
+      await expectLater(bridge.frames().first, throwsA(isA<FormatException>()));
     });
 
     test(

@@ -1,0 +1,4 @@
+/home/runner/work/Pitch-Translator/Pitch-Translator/dsp/_codeql_build_dir/CMakeFiles/pt_dsp.dir
+/home/runner/work/Pitch-Translator/Pitch-Translator/dsp/_codeql_build_dir/CMakeFiles/pt_dsp_tests.dir
+/home/runner/work/Pitch-Translator/Pitch-Translator/dsp/_codeql_build_dir/CMakeFiles/edit_cache.dir
+/home/runner/work/Pitch-Translator/Pitch-Translator/dsp/_codeql_build_dir/CMakeFiles/rebuild_cache.dir

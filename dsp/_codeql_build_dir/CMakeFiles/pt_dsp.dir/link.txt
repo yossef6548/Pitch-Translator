@@ -1,0 +1,2 @@
+/usr/bin/ar qc libpt_dsp.a CMakeFiles/pt_dsp.dir/src/dsp_core.cpp.o CMakeFiles/pt_dsp.dir/src/pitch_detector_stub.cpp.o
+/usr/bin/ranlib libpt_dsp.a

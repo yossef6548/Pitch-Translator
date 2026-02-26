@@ -137,6 +137,20 @@ class NativeAudioBridge {
       };
       v['rate_hz'] = _finiteOrNull(v['rate_hz']);
       v['depth_cents'] = _finiteOrNull(v['depth_cents']);
+
+      final detectedRaw = v['detected'];
+      if (detectedRaw is bool) {
+        // already valid
+      } else if (detectedRaw == null) {
+        v['detected'] = false;
+      } else if (detectedRaw is num) {
+        v['detected'] = detectedRaw != 0;
+      } else if (detectedRaw is String) {
+        final lower = detectedRaw.toLowerCase();
+        v['detected'] = lower == 'true' || lower == '1';
+      } else {
+        v['detected'] = false;
+      }
       normalized['vibrato'] = v;
     }
 

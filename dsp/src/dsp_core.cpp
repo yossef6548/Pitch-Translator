@@ -43,8 +43,9 @@ inline int wrap_history_index(int head, int offset_from_oldest, int count) {
 
 double parabolic_lag_refine(const std::array<double, kMaxProcessSamples>& cmndf,
                             int lag,
+                            int min_lag,
                             int max_lag) {
-    if (lag <= 1 || lag >= max_lag - 1) {
+    if (lag <= min_lag || lag >= max_lag - 1) {
         return static_cast<double>(lag);
     }
 
@@ -136,7 +137,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
             cmndf[lag] = 1.0;
             continue;
         }
-        cmndf[lag] = diff[lag] * static_cast<double>(lag - min_lag) / running_sum;
+        cmndf[lag] = diff[lag] * static_cast<double>(lag) / running_sum;
     }
 
     int best_lag = -1;
@@ -161,7 +162,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
         return out;
     }
 
-    const double refined_lag = parabolic_lag_refine(cmndf, best_lag, max_lag);
+    const double refined_lag = parabolic_lag_refine(cmndf, best_lag, min_lag, max_lag);
     const double freq = static_cast<double>(sample_rate) / refined_lag;
     if (!is_finite_positive(freq)) {
         dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
@@ -187,15 +188,15 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
         }
         if (samples > 0) {
             const double mean_freq = sum / static_cast<double>(samples);
-            double variance = 0.0;
+            double squared_sum_cents = 0.0;
             for (int i = 0; i < dsp->history_count; ++i) {
                 const int idx = wrap_history_index(dsp->history_head, i, dsp->history_count);
                 const double f = dsp->recent_freq_hz[idx];
                 if (f <= 0.0) continue;
                 const double cents_delta = 1200.0 * std::log2(f / mean_freq);
-                variance += cents_delta * cents_delta;
+                squared_sum_cents += cents_delta * cents_delta;
             }
-            const double rms_cents = std::sqrt(variance / static_cast<double>(samples));
+            const double rms_cents = std::sqrt(squared_sum_cents / static_cast<double>(samples));
             stability_confidence = std::clamp(1.0 - (rms_cents / 45.0), 0.0, 1.0);
         }
     }
