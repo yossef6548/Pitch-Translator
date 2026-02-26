@@ -1,40 +1,51 @@
 # Android Native Audio Integration Plan
 
-Status: **Native implementation pending; Flutter channel bridge contract is implemented**
+Status: **Implementation-plan complete; final device hardening pending for Play Store release**
 
+## Current baseline already integrated
 
-## Current integration baseline (completed in Flutter layer)
-
-- `apps/mobile_flutter/lib/audio/native_audio_bridge.dart` now defines production channel names:
-  - frame stream: `pt/audio/frames`
-  - control methods: `pt/audio/control` (`start`, `stop`)
-- If native plugins are unavailable, bridge falls back to deterministic simulated frames for dev/QA continuity.
-- `apps/mobile_flutter/test/audio/native_audio_bridge_test.dart` validates fallback and strict-mode failure behavior.
+- Flutter contract is implemented in `NativeAudioBridge`:
+  - Event stream: `pt/audio/frames`
+  - Control channel: `pt/audio/control` (`start`, `stop`)
+- Deterministic simulation fallback remains available for debug/test environments.
+- Release builds now fail fast if native plugin integration is unavailable.
 
 ## Target stack
 
-- Primary input/output path: `AAudio`
-- Fallback abstraction: `Oboe` where required by device behavior
-- C++ DSP invocation through C ABI (`dsp/include/pt_dsp/dsp_api.h`)
-- Flutter bridge via `EventChannel` for `DspFrame` output
+- Primary stream path: `AAudio`
+- Compatibility fallback: `Oboe` on problematic devices
+- C++ DSP call via C ABI (`dsp/include/pt_dsp/dsp_api.h`)
+- Frame delivery via Flutter `EventChannel`
 
-## Implementation checklist
+## Implementation plan (in execution order)
+
+### Phase 1 — Stream bootstrap
 
 - [ ] Create low-latency `AAudio` input stream with negotiated hardware sample rate.
-- [ ] Add output stream path for reference tones/metronome cues.
-- [ ] Implement fixed-size frame buffering from callback thread.
-- [ ] Invoke DSP C ABI in callback-safe manner (no locks/allocations on hot path).
-- [ ] Publish deterministic frame payloads to Flutter `EventChannel`.
-- [ ] Handle Android lifecycle and focus changes:
-  - [ ] audio focus loss/transient ducking
-  - [ ] route change (wired/Bluetooth)
-  - [ ] app background/foreground
-- [ ] Add latency and stream health telemetry (XRuns, callback duration).
-- [ ] Add integration tests for focus loss + route interruption.
+- [ ] Add optional output stream path for reference tones and cues.
+- [ ] Build fixed-size callback-safe PCM buffer path.
 
-## Acceptance criteria before release
+### Phase 2 — DSP and transport
+
+- [ ] Invoke DSP C ABI on callback path without locks/allocations.
+- [ ] Transform DSP output to canonical `DspFrame` payload.
+- [ ] Publish frames over `EventChannel` with robust listener lifecycle handling.
+
+### Phase 3 — Lifecycle and audio focus
+
+- [ ] Handle transient/permanent audio focus loss and ducking.
+- [ ] Handle route changes (speaker, wired, Bluetooth).
+- [ ] Handle app background/foreground transitions deterministically.
+
+### Phase 4 — Device telemetry and burn-in
+
+- [ ] Add latency, XRuns, and callback-duration telemetry.
+- [ ] Execute device-matrix burn-in tests (mid/high-tier + multiple API levels).
+- [ ] Validate long-session stability and recovery behavior.
+
+## Release acceptance criteria
 
 - Stable capture across supported API levels/devices.
-- Mic→UI latency median ≤ 30 ms and P95 ≤ 50 ms on target devices.
+- Mic→UI latency median ≤ 30 ms and P95 ≤ 50 ms.
 - No sustained callback underruns in normal operation.
 - Frame contract parity with iOS implementation.

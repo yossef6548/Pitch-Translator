@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
@@ -10,15 +11,19 @@ class NativeAudioBridge {
   NativeAudioBridge({
     EventChannel? frameChannel,
     MethodChannel? controlChannel,
-    this.enableSimulationFallback = true,
+    bool? enableSimulationFallback,
   })  : _frameChannel = frameChannel ?? const EventChannel(_defaultFrameChannelName),
-        _controlChannel = controlChannel ?? const MethodChannel(_defaultControlChannelName);
+        _controlChannel = controlChannel ?? const MethodChannel(_defaultControlChannelName),
+        enableSimulationFallback = enableSimulationFallback ?? !kReleaseMode;
 
   static const String _defaultFrameChannelName = 'pt/audio/frames';
   static const String _defaultControlChannelName = 'pt/audio/control';
 
   final EventChannel _frameChannel;
   final MethodChannel _controlChannel;
+
+  /// In release builds the default is false so production binaries fail fast if
+  /// native streaming is missing. Debug/profile builds default to true for QA.
   final bool enableSimulationFallback;
 
   Stream<DspFrame>? _cachedStream;

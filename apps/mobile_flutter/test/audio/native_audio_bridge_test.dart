@@ -6,6 +6,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('NativeAudioBridge', () {
+    test('defaults simulation fallback on for test/debug mode', () {
+      final bridge = NativeAudioBridge();
+
+      expect(bridge.enableSimulationFallback, isTrue);
+    });
+
     test('falls back to deterministic simulation when plugins are missing', () async {
       final bridge = NativeAudioBridge(enableSimulationFallback: true);
 
