@@ -51,13 +51,13 @@ void main() {
       },
     );
 
-    test('rejects payload with missing required keys', () {
+    test('rejects payload with missing required keys', () async {
       const channel = EventChannel('pt/audio/frames/test_keys');
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockStreamHandler(
-            channel,
-            _MapEventHandler({'timestamp_ms': 1, 'confidence': 0.5}),
-          );
+        channel,
+        _MapEventHandler({'timestamp_ms': 1, 'confidence': 0.5}),
+      );
 
       const controlChannel = MethodChannel('pt/audio/control/test_keys');
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -78,21 +78,21 @@ void main() {
         const channel = EventChannel('pt/audio/frames/test_normalize');
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockStreamHandler(
-              channel,
-              _MapEventHandler({
-                'timestamp_ms': 10,
-                'freq_hz': double.nan,
-                'midi_float': double.nan,
-                'nearest_midi': -1,
-                'cents_error': double.nan,
-                'confidence': 1.2,
-                'vibrato': {
-                  'detected': false,
-                  'rate_hz': double.nan,
-                  'depth_cents': double.nan,
-                },
-              }),
-            );
+          channel,
+          _MapEventHandler({
+            'timestamp_ms': 10,
+            'freq_hz': double.nan,
+            'midi_float': double.nan,
+            'nearest_midi': -1,
+            'cents_error': double.nan,
+            'confidence': 1.2,
+            'vibrato': {
+              'detected': false,
+              'rate_hz': double.nan,
+              'depth_cents': double.nan,
+            },
+          }),
+        );
 
         const controlChannel = MethodChannel('pt/audio/control/test_normalize');
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -124,11 +124,11 @@ void main() {
       const controlChannel = MethodChannel('pt/audio/control/test');
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(controlChannel, (call) async {
-            if (call.method == 'start') {
-              return null;
-            }
-            return null;
-          });
+        if (call.method == 'start') {
+          return null;
+        }
+        return null;
+      });
 
       final bridge = NativeAudioBridge(
         frameChannel: channel,

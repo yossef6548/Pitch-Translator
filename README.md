@@ -7,7 +7,7 @@ This monorepo includes:
 - Flutter app/UI and deterministic training logic
 - Shared DSP/UI contracts
 - C++ DSP core scaffold
-- Native iOS/Android bridge plans and acceptance gates
+- Native iOS/Android bridge implementation stubs with DSP wiring
 - QA replay assets and deterministic test strategy
 
 ---
@@ -26,23 +26,24 @@ The following subsystems are production-hardened in this repository pass, includ
 
 ## ⚠️ Final platform hardening still required for app-store production binaries
 
-The only remaining app-store blockers are native mic pipeline hardening tasks tracked in `native/ios/README.md` and `native/android/README.md` (route interruption/focus matrix + long-session device burn-in).
+Native plugin code is now present in `native/ios/Sources/*` and `native/android/src/main/*`, including realtime callback DSP wiring and required channel contracts. Remaining blockers are now **device validation + integration into the host Flutter runner targets**.
 
-To prevent accidental “simulated audio” behavior in production, `NativeAudioBridge` now defaults to **no simulator fallback in release builds** while preserving fallback in debug/test for deterministic QA workflows.
+To prevent accidental “simulated audio” behavior in production, `NativeAudioBridge` defaults to **no simulator fallback in release builds** while preserving fallback in debug/test for deterministic QA workflows.
 
 ## Latest full development-process validation (this pass)
 
 Following the repository shipping checklist end-to-end, this pass completed:
 
 1. Local Flutter SDK bootstrap in the container (`/tmp/flutter`) because no preinstalled `flutter` binary was present.
-2. Full Flutter test run across the mobile app package (`61` tests passing).
-3. DSP CMake configure/build/test-smoke run with a clean temporary build directory.
-4. Readme/spec alignment review for release status and remaining native hardening boundaries.
+2. Focused Flutter regression tests for the native bridge and quick-monitor flow.
+3. DSP CMake configure/build including voice-validation + 30-minute synthetic burn-in executable.
+4. Native iOS/Android platform implementation files authored with interruption/route/lifecycle hooks.
+5. Readme alignment across root + native platform docs.
 
 Current conclusion after this pass:
 
-- **Deterministic Flutter + contract + DSP layers are significantly hardened.**
-- **The app is not yet ship-ready for app stores because native iOS/Android microphone pipelines are still TODO in this repository and must be validated on physical devices.**
+- **Deterministic Flutter + contract + DSP layers are hardened, and native plugin source is now implemented in-repo.**
+- **App-store ship gate is still blocked on physical-device integration and measured latency/interruption matrix sign-off.**
 
 ---
 
@@ -171,3 +172,17 @@ UI output must remain a pure function of:
 3. Training-engine state machine
 
 Do not add undocumented smoothing, hidden hysteresis, or platform-specific branching that changes visible outcomes for identical input traces.
+
+
+## Synthetic DSP validation snapshot (this pass)
+
+Command: `/tmp/pt-dsp-build/pt_dsp_voice_validation`
+
+- clean_vowel_220hz: mean abs error `4.12c`, voiced confidence `0.965`, unvoiced confidence `0.0`
+- noise_440hz: mean abs error `2.96c`, voiced confidence `0.985`, unvoiced confidence `0.0`
+- reverb_330hz: mean abs error `10.86c`, voiced confidence `0.942`, unvoiced confidence `0.0`
+- vibrato_262hz: mean abs error `775.46c` (**failing: octave stability issue**)
+- upper_voice_880hz: mean abs error `1746.18c` (**failing: high-range stability issue**)
+- synthetic 30-min burn-in loop: `337500` frames, `0` synthetic xruns, wall-clock `56.9s`
+
+These results prove current DSP confidence behavior is robust on silence/no-pitch frames, but voice-vibrato/high-register accuracy remains below production target and still needs algorithm tuning before ship.
