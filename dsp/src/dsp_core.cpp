@@ -11,6 +11,7 @@ constexpr int kMinFreqHz = 80;
 constexpr int kMaxFreqHz = 1100;
 constexpr int kHistorySize = 64;
 constexpr double kYinThreshold = 0.12;
+constexpr double kMaxTrackingJumpCents = 700.0;
 
 inline double hz_to_midi(double hz, double a4_hz) {
     return 69.0 + 12.0 * std::log2(hz / a4_hz);
@@ -33,6 +34,7 @@ struct PT_DSP {
     int history_count = 0;
     int history_head = 0;
     std::array<double, kHistorySize> recent_freq_hz{};
+    double last_tracked_freq_hz = NAN;
 };
 
 namespace {
@@ -58,6 +60,84 @@ double parabolic_lag_refine(const std::array<double, kMaxProcessSamples>& cmndf,
     }
     const double delta = (y0 - y2) / denom;
     return static_cast<double>(lag) + std::clamp(delta, -0.5, 0.5);
+}
+
+double cents_distance(double a_hz, double b_hz) {
+    if (!is_finite_positive(a_hz) || !is_finite_positive(b_hz)) {
+        return 1e9;
+    }
+    return std::abs(1200.0 * std::log2(a_hz / b_hz));
+}
+
+double choose_tracked_frequency(const PT_DSP* dsp, double base_freq) {
+    if (!is_finite_positive(base_freq)) {
+        return base_freq;
+    }
+    if (!is_finite_positive(dsp->last_tracked_freq_hz)) {
+        return base_freq;
+    }
+
+    const double candidates[] = {
+        base_freq * 0.25,
+        base_freq * 0.5,
+        base_freq,
+        base_freq * 2.0,
+    };
+
+    double best = base_freq;
+    double best_distance = cents_distance(base_freq, dsp->last_tracked_freq_hz);
+    for (double c : candidates) {
+        const double d = cents_distance(c, dsp->last_tracked_freq_hz);
+        if (d < best_distance) {
+            best_distance = d;
+            best = c;
+        }
+    }
+
+    return best_distance <= kMaxTrackingJumpCents ? best : base_freq;
+}
+
+double estimate_vibrato_rate_hz(const PT_DSP* dsp) {
+    if (dsp->history_count < 12) {
+        return NAN;
+    }
+
+    double sum = 0.0;
+    int count = 0;
+    for (int i = 0; i < dsp->history_count; ++i) {
+        const int idx = wrap_history_index(dsp->history_head, i, dsp->history_count);
+        sum += dsp->recent_cents[idx];
+        ++count;
+    }
+    if (count == 0) {
+        return NAN;
+    }
+    const double mean = sum / static_cast<double>(count);
+
+    int zero_crossings = 0;
+    int prev_sign = 0;
+    double oldest_t = NAN;
+    for (int i = 0; i < dsp->history_count; ++i) {
+        const int idx = wrap_history_index(dsp->history_head, i, dsp->history_count);
+        const double centered = dsp->recent_cents[idx] - mean;
+        const int sign = centered > 0 ? 1 : (centered < 0 ? -1 : 0);
+        if (sign != 0) {
+            if (prev_sign != 0 && sign != prev_sign) {
+                ++zero_crossings;
+            }
+            prev_sign = sign;
+        }
+        if (!std::isfinite(oldest_t)) {
+            oldest_t = dsp->recent_time_ms[idx];
+        }
+    }
+    const int cycles = zero_crossings / 2;
+    if (cycles <= 0 || !std::isfinite(oldest_t)) {
+        return NAN;
+    }
+    const int newest_idx = wrap_history_index(dsp->history_head, dsp->history_count - 1, dsp->history_count);
+    const double duration_s = std::max(1e-6, (dsp->recent_time_ms[newest_idx] - oldest_t) / 1000.0);
+    return static_cast<double>(cycles) / duration_s;
 }
 }  // namespace
 
@@ -162,8 +242,20 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
         return out;
     }
 
+    for (int divisor = 2; divisor <= 4; ++divisor) {
+        const int harmonic_lag = best_lag / divisor;
+        if (harmonic_lag < min_lag) {
+            continue;
+        }
+        if (cmndf[harmonic_lag] <= std::min(0.2, best_cmndf * 1.35)) {
+            best_lag = harmonic_lag;
+            best_cmndf = cmndf[harmonic_lag];
+        }
+    }
+
     const double refined_lag = parabolic_lag_refine(cmndf, best_lag, min_lag, max_lag);
-    const double freq = static_cast<double>(sample_rate) / refined_lag;
+    const double raw_freq = static_cast<double>(sample_rate) / refined_lag;
+    const double freq = choose_tracked_frequency(dsp, raw_freq);
     if (!is_finite_positive(freq)) {
         dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
         return out;
@@ -214,6 +306,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
         dsp->recent_freq_hz[dsp->history_head] = freq;
         dsp->history_head = (dsp->history_head + 1) % kHistorySize;
         dsp->history_count = std::min(kHistorySize, dsp->history_count + 1);
+        dsp->last_tracked_freq_hz = freq;
     }
 
     if (dsp->history_count >= 8) {
@@ -227,10 +320,9 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
         }
         const double duration_s = std::max(1e-6, (out.timestamp_ms - oldest_t) / 1000.0);
         const double depth = (max_c - min_c) * 0.5;
-        const double cycles_estimate = std::max(0.0, (max_c - min_c) / 20.0);
-        const double rate_hz = cycles_estimate / duration_s;
+        const double rate_hz = estimate_vibrato_rate_hz(dsp);
 
-        if (depth > 2.0 && rate_hz >= 3.0 && rate_hz <= 9.0) {
+        if (depth > 2.0 && std::isfinite(rate_hz) && rate_hz >= 3.0 && rate_hz <= 9.0 && duration_s >= 0.2) {
             out.vibrato_detected = true;
             out.vibrato_depth_cents = depth;
             out.vibrato_rate_hz = rate_hz;

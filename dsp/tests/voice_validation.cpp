@@ -19,7 +19,24 @@ struct ScenarioResult {
   double meanAbsCents = 0;
   double voicedConfidence = 0;
   double unvoicedConfidence = 0;
+  bool pass = false;
 };
+
+struct ScenarioGate {
+  double maxMeanAbsCents;
+  double minVoicedConfidence;
+  double maxUnvoicedConfidence;
+};
+
+ScenarioGate gateForScenario(const std::string& name) {
+  if (name == "vibrato_262hz") {
+    return {55.0, 0.75, 0.15};
+  }
+  if (name == "upper_voice_880hz") {
+    return {80.0, 0.68, 0.15};
+  }
+  return {20.0, 0.8, 0.12};
+}
 
 double midiToHz(double midi) { return 440.0 * std::pow(2.0, (midi - 69.0) / 12.0); }
 
@@ -95,12 +112,17 @@ ScenarioResult runScenario(const std::string& name, double hz, bool vibrato, boo
   }
 
   pt_dsp_destroy(dsp);
-  return {
+  ScenarioResult result{
       name,
       centsCount == 0 ? 0.0 : centsSum / centsCount,
       voicedConfCount == 0 ? 0.0 : voicedConfSum / voicedConfCount,
       unvoicedConfCount == 0 ? 0.0 : unvoicedConfSum / unvoicedConfCount,
   };
+  const auto gate = gateForScenario(name);
+  result.pass = result.meanAbsCents <= gate.maxMeanAbsCents &&
+                result.voicedConfidence >= gate.minVoicedConfidence &&
+                result.unvoicedConfidence <= gate.maxUnvoicedConfidence;
+  return result;
 }
 }  // namespace
 
@@ -114,11 +136,18 @@ int main() {
   results.push_back(runScenario("vibrato_262hz", 262.0, true, false, 0.01));
   results.push_back(runScenario("upper_voice_880hz", 880.0, true, true, 0.02));
 
+  bool allScenariosPassed = true;
   for (const auto& r : results) {
+    const auto gate = gateForScenario(r.name);
     std::cout << r.name
               << " mean_abs_cents=" << r.meanAbsCents
               << " voiced_conf=" << r.voicedConfidence
-              << " unvoiced_conf=" << r.unvoicedConfidence << "\n";
+              << " unvoiced_conf=" << r.unvoicedConfidence
+              << " gate(max_cents=" << gate.maxMeanAbsCents
+              << ", min_voiced_conf=" << gate.minVoicedConfidence
+              << ", max_unvoiced_conf=" << gate.maxUnvoicedConfidence << ")"
+              << " status=" << (r.pass ? "PASS" : "FAIL") << "\n";
+    allScenariosPassed = allScenariosPassed && r.pass;
   }
 
   constexpr int kThirtyMinutesFrames = (30 * 60 * kSampleRate) / kHop;
@@ -143,5 +172,5 @@ int main() {
   const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
   std::cout << "burn_in_frames=" << kThirtyMinutesFrames << " xruns=" << xruns << " wall_ms=" << elapsedMs << "\n";
 
-  return 0;
+  return allScenariosPassed && xruns == 0 ? 0 : 1;
 }
