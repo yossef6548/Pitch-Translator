@@ -12,6 +12,33 @@ struct Engine {
   jmethodID on_frame = nullptr;
 };
 
+// RAII helper that attaches the calling thread to the JVM if not already attached,
+// and detaches it on destruction only if it was attached here.
+struct JNIEnvGuard {
+  JavaVM* vm;
+  JNIEnv* env = nullptr;
+  bool attached = false;
+
+  explicit JNIEnvGuard(JavaVM* vm) : vm(vm) {
+    jint state = vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
+    if (state == JNI_EDETACHED) {
+      if (vm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+        attached = true;
+      } else {
+        env = nullptr;
+      }
+    } else if (state != JNI_OK) {
+      env = nullptr;
+    }
+  }
+
+  ~JNIEnvGuard() {
+    if (attached) {
+      vm->DetachCurrentThread();
+    }
+  }
+};
+
 static aaudio_data_callback_result_t dataCallback(
     AAudioStream* stream,
     void* userData,
@@ -25,12 +52,12 @@ static aaudio_data_callback_result_t dataCallback(
   const float* pcm = static_cast<const float*>(audioData);
   const DSPFrameOutput frame = pt_dsp_process(engine->dsp, pcm, numFrames);
 
-  JNIEnv* env = nullptr;
-  if (engine->vm->AttachCurrentThread(&env, nullptr) != JNI_OK) {
+  JNIEnvGuard guard(engine->vm);
+  if (guard.env == nullptr) {
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
   }
 
-  env->CallVoidMethod(
+  guard.env->CallVoidMethod(
       engine->plugin_obj,
       engine->on_frame,
       frame.timestamp_ms,
@@ -57,6 +84,7 @@ Java_com_pitchtranslator_audio_NativeAaudioEngine_nativeStart(JNIEnv* env, jobje
   AAudioStreamBuilder* builder = nullptr;
   AAudio_createStreamBuilder(&builder);
   AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_INPUT);
+  AAudioStreamBuilder_setChannelCount(builder, 1);
   AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_FLOAT);
   AAudioStreamBuilder_setPerformanceMode(builder, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
   AAudioStreamBuilder_setDataCallback(builder, dataCallback, engine);

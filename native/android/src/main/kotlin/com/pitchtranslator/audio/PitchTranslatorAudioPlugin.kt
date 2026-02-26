@@ -29,8 +29,10 @@ class PitchTranslatorAudioPlugin :
 
   private var activity: Activity? = null
   private var restartOnResume = false
+  private var appLifecycle: AppLifecycle? = null
 
   private lateinit var audioManager: AudioManager
+  private var focusListener: AudioManager.OnAudioFocusChangeListener? = null
   private val deviceCallback = object : AudioDeviceCallback() {
     override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
       if (engine.isRunning()) {
@@ -102,26 +104,33 @@ class PitchTranslatorAudioPlugin :
   }
 
   private fun requestAudioFocus(): Boolean {
+    val listener = AudioManager.OnAudioFocusChangeListener { change ->
+      if (change <= 0) {
+        restartOnResume = engine.isRunning()
+        engine.stop()
+      }
+    }
     val result = audioManager.requestAudioFocus(
-      { change ->
-        if (change <= 0) {
-          restartOnResume = engine.isRunning()
-          engine.stop()
-        }
-      },
+      listener,
       AudioManager.STREAM_MUSIC,
       AudioManager.AUDIOFOCUS_GAIN
     )
+    if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+      focusListener = listener
+    }
     return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
   }
 
   private fun abandonAudioFocus() {
-    audioManager.abandonAudioFocus(null)
+    audioManager.abandonAudioFocus(focusListener)
+    focusListener = null
   }
 
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
     activity = binding.activity
-    (activity?.application as? Application)?.registerActivityLifecycleCallbacks(AppLifecycle(this))
+    val lifecycle = AppLifecycle(this)
+    appLifecycle = lifecycle
+    (activity?.application as? Application)?.registerActivityLifecycleCallbacks(lifecycle)
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
@@ -133,6 +142,10 @@ class PitchTranslatorAudioPlugin :
   }
 
   override fun onDetachedFromActivity() {
+    appLifecycle?.let { lifecycle ->
+      (activity?.application as? Application)?.unregisterActivityLifecycleCallbacks(lifecycle)
+    }
+    appLifecycle = null
     activity = null
     restartOnResume = false
     engine.stop()
