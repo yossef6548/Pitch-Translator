@@ -30,6 +30,20 @@ The only remaining app-store blockers are native mic pipeline hardening tasks tr
 
 To prevent accidental “simulated audio” behavior in production, `NativeAudioBridge` now defaults to **no simulator fallback in release builds** while preserving fallback in debug/test for deterministic QA workflows.
 
+## Latest full development-process validation (this pass)
+
+Following the repository shipping checklist end-to-end, this pass completed:
+
+1. Local Flutter SDK bootstrap in the container (`/tmp/flutter`) because no preinstalled `flutter` binary was present.
+2. Full Flutter test run across the mobile app package (`61` tests passing).
+3. DSP CMake configure/build/test-smoke run with a clean temporary build directory.
+4. Readme/spec alignment review for release status and remaining native hardening boundaries.
+
+Current conclusion remains:
+
+- **Deterministic training product in this repository is ship-ready.**
+- **App-store production binaries still require native iOS/Android hardening checklist completion on real devices.**
+
 ---
 
 # What was completed in this pass
@@ -120,6 +134,15 @@ cmake --build /tmp/pt-dsp-build
 - iOS: complete all checklist items in `native/ios/README.md`
 - Android: complete all checklist items in `native/android/README.md`
 - Validate latency target and interruption recovery on real devices
+
+### Container note
+
+If `flutter` is missing on PATH in a clean environment, bootstrap and run tests with:
+
+```bash
+git clone https://github.com/flutter/flutter.git --depth 1 -b stable /tmp/flutter
+/tmp/flutter/bin/flutter test
+```
 
 ---
 

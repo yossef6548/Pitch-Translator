@@ -21,6 +21,12 @@ Latest pass updates included:
 - Drift replay widget tests were stabilized by avoiding async file writes in `testWidgets` fake-async context.
 - Library screen loading now falls back to deterministic empty-state values if repository/database access is unavailable.
 
+This validation pass additionally executed the full repository QA checklist in-container:
+
+- End-to-end Flutter test run (`flutter test`) completed with all suites green.
+- DSP smoke compile/test cycle completed from `dsp/` CMake target.
+- Deterministic QA matrix and replay harness behavior revalidated as stable.
+
 
 - Replay tests (`test/qa/replay_harness_test.dart`):
   - QA-G-01, QA-G-02
@@ -70,6 +76,14 @@ flutter test test/qa/qa_matrix_test.dart
 flutter test test/qa/drift_snippet_recorder_test.dart
 flutter test test/training_engine_test.dart
 flutter test test/exercises/progression_engine_test.dart
+```
+
+If `flutter` is not preinstalled in your environment:
+
+```bash
+git clone https://github.com/flutter/flutter.git --depth 1 -b stable /tmp/flutter
+cd apps/mobile_flutter
+/tmp/flutter/bin/flutter test
 ```
 
 ## Trace authoring format

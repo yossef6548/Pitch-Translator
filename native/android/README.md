@@ -17,6 +17,13 @@ Status: **Implementation-plan complete; final device hardening pending for Play 
 - C++ DSP call via C ABI (`dsp/include/pt_dsp/dsp_api.h`)
 - Frame delivery via Flutter `EventChannel`
 
+
+## Validation progress in this pass
+
+- Re-ran Flutter deterministic QA and full widget/unit suite successfully to confirm bridge-contract behavior remained stable from the Dart side.
+- Re-ran DSP smoke build/tests to confirm C++ contract buildability.
+- Confirmed no native implementation delta was introduced; checklist items below remain the exact app-store release blockers for native binaries.
+
 ## Implementation plan (in execution order)
 
 ### Phase 1 — Stream bootstrap
