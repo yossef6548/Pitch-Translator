@@ -1331,25 +1331,23 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
       return const <_SnippetReplayFrame>[];
     }
 
-    final rawJson = () {
-      try {
-        return file.readAsStringSync();
-      } catch (_) {
-        return '';
-      }
-    }();
+    String rawJson;
+    try {
+      rawJson = file.readAsStringSync();
+    } catch (_) {
+      rawJson = '';
+    }
 
     if (rawJson.isEmpty) {
       return const <_SnippetReplayFrame>[];
     }
 
-    final decoded = () {
-      try {
-        return jsonDecode(rawJson);
-      } catch (_) {
-        return null;
-      }
-    }();
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(rawJson);
+    } catch (_) {
+      decoded = null;
+    }
 
     if (decoded is! Map<String, dynamic>) {
       return const <_SnippetReplayFrame>[];
