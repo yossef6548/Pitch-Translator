@@ -71,6 +71,7 @@ class NativeAudioBridge {
   Stream<DspFrame> _createFrameStream() async* {
     if (enableSimulationFallback) {
       try {
+        await _controlChannel.invokeMethod<void>('start');
         yield* _nativeFrameStream();
       } on MissingPluginException {
         yield* _simulatedFrames();
@@ -78,6 +79,7 @@ class NativeAudioBridge {
       return;
     }
 
+    await _controlChannel.invokeMethod<void>('start');
     yield* _nativeFrameStream();
   }
 

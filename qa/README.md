@@ -12,6 +12,14 @@ This folder contains deterministic QA assets and guidance for validating `specs/
 
 ## Automated suite coverage
 
+Latest pass updates included:
+
+- Native audio bridge startup probing + fallback/fail-fast behavior is now explicitly regression-tested.
+- Drift-awareness recovery behavior now matches QA-DA expectations (confirm persists until real recovery input).
+- Locked-state visual rigidity (within tolerance) is enforced by QA matrix tests.
+- Drift snippet replay file loading now uses bounded file IO to avoid unresolved async waits in edge-path tests.
+
+
 - Replay tests (`test/qa/replay_harness_test.dart`):
   - QA-G-01, QA-G-02
   - QA-DA-01, QA-DA-02

@@ -1327,10 +1327,14 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
       return const <_SnippetReplayFrame>[];
     }
     final file = File(uri);
-    if (!await file.exists()) {
+    final exists = await file.exists().timeout(const Duration(milliseconds: 250), onTimeout: () => false);
+    if (!exists) {
       return const <_SnippetReplayFrame>[];
     }
-    final rawJson = await file.readAsString();
+    final rawJson = await file.readAsString().timeout(const Duration(milliseconds: 250), onTimeout: () => "");
+    if (rawJson.isEmpty) {
+      return const <_SnippetReplayFrame>[];
+    }
     final decoded = jsonDecode(rawJson);
     if (decoded is! Map<String, dynamic>) {
       return const <_SnippetReplayFrame>[];
@@ -1382,10 +1386,7 @@ class _DriftReplaySheetState extends State<DriftReplaySheet> {
             builder: (context, snapshot) {
               final frames = snapshot.data ?? const <_SnippetReplayFrame>[];
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: LinearProgressIndicator(minHeight: 2),
-                );
+                return const SizedBox(height: 12);
               }
               if (frames.isEmpty) {
                 return const Padding(

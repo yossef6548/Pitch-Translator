@@ -34,23 +34,29 @@ To prevent accidental “simulated audio” behavior in production, `NativeAudio
 
 # What was completed in this pass
 
-## 1) Audio bridge release-safety hardening
+## 1) Audio bridge hardening + deterministic plugin-absence behavior
 
-- Updated `NativeAudioBridge` so simulation fallback defaults to:
-  - `true` in debug/test/profile contexts
-  - `false` in release builds (`kReleaseMode` fail-fast if native plugin is missing)
-- Added a test to lock this default behavior and avoid regression.
+- `NativeAudioBridge.frames()` now performs a native-start probe before frame subscription.
+- If native plugins are absent and fallback is enabled, the stream immediately switches to deterministic simulation.
+- If fallback is disabled, frame and control paths fail fast with `MissingPluginException`.
+- Added/updated tests to lock method-channel probing behavior and payload validation.
 
 Why this matters:
 
 - Debug/CI deterministic replay remains fast and reliable.
 - Release binaries cannot silently stream synthetic frames when native capture is unavailable.
 
-## 2) Documentation closure across README surfaces
+## 2) Training-engine spec alignment fixes
 
-- Root README rewritten as a ship-gate document (what is done, what remains, exact verification commands).
-- iOS/Android README files updated to include phased execution checklists and explicit release criteria.
-- QA README updated with deterministic coverage, release-signoff checks, and expected outputs.
+- Drift-awareness flow now keeps `DRIFT_CONFIRMED` until incoming frames actually recover within tolerance, then returns to seeking-lock/relock progression.
+- Locked state visuals are now rigid when effective error is within tolerance (centered X offset + no deformation), matching QA matrix expectations.
+- Added bounded snippet-file IO behavior for drift replay snippet loading so unavailable files resolve deterministically instead of stalling asynchronous UI state.
+
+## 3) Documentation closure across README surfaces
+
+- Root README maintained as a ship-gate document (what is done, what remains, exact verification commands).
+- QA README expanded with this pass's behavior fixes and verification guidance.
+- iOS/Android READMEs remain the source of truth for remaining device hardening before app-store binaries.
 
 ---
 
