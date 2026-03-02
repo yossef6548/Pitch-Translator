@@ -43,6 +43,7 @@ struct FrameRing {
       return false;
     }
     *out = slot.frame;
+    items[read].valid = false;
     read_index.store((read + 1u) % kFrameQueueSize, std::memory_order_release);
     return true;
   }
@@ -194,14 +195,18 @@ Java_com_pitchtranslator_audio_NativeAaudioEngine_nativeStop(JNIEnv* env, jobjec
   auto* engine = reinterpret_cast<Engine*>(handle);
   if (engine == nullptr) return;
 
-  engine->running.store(false, std::memory_order_release);
-
   if (engine->stream != nullptr) {
     AAudioStream_requestStop(engine->stream);
-    AAudioStream_close(engine->stream);
+    aaudio_stream_state_t ignored = AAUDIO_STREAM_STATE_STOPPING;
+    aaudio_stream_state_t nextState = AAUDIO_STREAM_STATE_UNINITIALIZED;
+    AAudioStream_waitForStateChange(engine->stream, ignored, &nextState, 2000000000LL);
   }
+  engine->running.store(false, std::memory_order_release);
   if (engine->emitter_thread.joinable()) {
     engine->emitter_thread.join();
+  }
+  if (engine->stream != nullptr) {
+    AAudioStream_close(engine->stream);
   }
   if (engine->dsp != nullptr) {
     pt_dsp_destroy(engine->dsp);

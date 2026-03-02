@@ -202,13 +202,14 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
           let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
 
     if type == .began {
-      shouldResumeOnForeground = isRunning
+      stateQueue.sync { shouldResumeOnForeground = isRunning }
       stopCapture()
       return
     }
 
-    if type == .ended, shouldResumeOnForeground {
-      try? startCapture()
+    if type == .ended {
+      let shouldResume: Bool = stateQueue.sync { shouldResumeOnForeground }
+      if shouldResume { try? startCapture() }
     }
   }
 
@@ -216,15 +217,15 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
     guard let reasonRaw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
           let reason = AVAudioSession.RouteChangeReason(rawValue: reasonRaw) else { return }
 
-    if (reason == .oldDeviceUnavailable || reason == .newDeviceAvailable), isRunning {
+    let wasRunning: Bool = stateQueue.sync { isRunning }
+    if (reason == .oldDeviceUnavailable || reason == .newDeviceAvailable), wasRunning {
       stopCapture()
       try? startCapture()
     }
   }
 
   @objc private func onForeground() {
-    if shouldResumeOnForeground, !isRunning {
-      try? startCapture()
-    }
+    let shouldResume: Bool = stateQueue.sync { shouldResumeOnForeground && !isRunning }
+    if shouldResume { try? startCapture() }
   }
 }
