@@ -51,7 +51,11 @@ class PitchTranslatorAudioPlugin :
     if (!engine.isRunning() || suppressFocusLoop) return@Runnable
     Log.i(TAG, "Restarting audio engine after debounced device route change")
     engine.stop()
-    engine.start()
+    try {
+      engine.start()
+    } catch (e: IllegalArgumentException) {
+      Log.e(TAG, "Failed to restart audio engine after debounced device route change", e)
+    }
   }
 
   private val deviceCallback = object : AudioDeviceCallback() {
@@ -85,7 +89,7 @@ class PitchTranslatorAudioPlugin :
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     audioManager.unregisterAudioDeviceCallback(deviceCallback)
     deviceRestartHandler.removeCallbacksAndMessages(null)
-    engine.stop()
+    stopEngineWithFocusRelease()
     methodChannel?.setMethodCallHandler(null)
     frameChannel?.setStreamHandler(null)
     methodChannel = null
@@ -145,6 +149,7 @@ class PitchTranslatorAudioPlugin :
         engine.start()
         result.success(null)
       } catch (error: IllegalArgumentException) {
+        abandonAudioFocus()
         result.error("audio_start_failed", error.message, null)
       }
     } else {
@@ -233,7 +238,12 @@ class PitchTranslatorAudioPlugin :
   override fun onResume(owner: LifecycleOwner) {
     if (restartOnResume && hasRecordAudioPermission() && requestAudioFocus()) {
       restartOnResume = false
-      engine.start()
+      try {
+        engine.start()
+      } catch (e: IllegalArgumentException) {
+        Log.e(TAG, "Failed to restart audio engine on resume", e)
+        stopEngineWithFocusRelease()
+      }
     }
   }
 

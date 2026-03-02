@@ -67,7 +67,9 @@ class NativeAudioBridge {
   Future<void> dispose() async {
     await _cachedSubscription?.cancel();
     _cachedSubscription = null;
-    await _frameController?.close();
+    if (_frameController != null && !_frameController!.isClosed) {
+      await _frameController!.close();
+    }
     _frameController = null;
     _cachedStream = null;
   }
@@ -108,7 +110,6 @@ class NativeAudioBridge {
   Future<void> stop() async {
     try {
       await _controlChannel.invokeMethod<void>('stop');
-      _isRunning = false;
     } on MissingPluginException {
       if (!enableSimulationFallback) {
         throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
@@ -117,6 +118,8 @@ class NativeAudioBridge {
       throw _mapPlatformError(e);
     } catch (error) {
       throw AudioBridgeException(AudioBridgeFailure.unknown, details: '$error');
+    } finally {
+      _isRunning = false;
     }
   }
 
