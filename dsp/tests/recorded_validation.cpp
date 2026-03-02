@@ -13,6 +13,13 @@
 #include <string>
 #include <vector>
 
+#ifndef PT_FIXTURE_PATH
+#define PT_FIXTURE_PATH "dsp/tests/samples/fixtures.txt"
+#endif
+#ifndef PT_GENERATED_DIR
+#define PT_GENERATED_DIR "dsp/tests/samples/generated"
+#endif
+
 namespace {
 constexpr double kPi = 3.141592653589793;
 
@@ -54,20 +61,33 @@ bool loadFixtures(const std::string& path, std::vector<FixtureSpec>* fixtures) {
 
   fixtures->clear();
   std::string line;
+  int lineNum = 0;
   while (std::getline(in, line)) {
+    ++lineNum;
     if (line.empty() || line[0] == '#') continue;
     std::vector<std::string> fields;
-    if (!splitFixtureLine(line, &fields)) return false;
+    if (!splitFixtureLine(line, &fields)) {
+      std::cerr << "fixture_parse_error: expected 8 comma-separated fields at line " << lineNum
+                << ": \"" << line << "\"\n";
+      return false;
+    }
 
     FixtureSpec f;
     f.name = fields[0];
-    f.expectedHz = std::stod(fields[1]);
-    f.baseHz = std::stod(fields[2]);
-    f.durationSeconds = std::stod(fields[3]);
-    f.vibratoDepth = std::stod(fields[4]);
-    f.vibratoRateHz = std::stod(fields[5]);
-    f.noiseAmp = std::stod(fields[6]);
-    f.amplitude = std::stod(fields[7]);
+    try {
+      f.expectedHz = std::stod(fields[1]);
+      f.baseHz = std::stod(fields[2]);
+      f.durationSeconds = std::stod(fields[3]);
+      f.vibratoDepth = std::stod(fields[4]);
+      f.vibratoRateHz = std::stod(fields[5]);
+      f.noiseAmp = std::stod(fields[6]);
+      f.amplitude = std::stod(fields[7]);
+    } catch (const std::exception& e) {
+      std::cerr << "fixture_parse_error: invalid number in fixture '" << f.name
+                << "' at line " << lineNum << ": " << e.what()
+                << " (line: \"" << line << "\")\n";
+      return false;
+    }
     fixtures->push_back(f);
   }
 
@@ -186,18 +206,19 @@ bool readWavPcm16(const std::string& path, WavData* out) {
 }
 }  // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
   constexpr int kSampleRate = 48000;
-  constexpr char kFixturePath[] = "dsp/tests/samples/fixtures.txt";
+  const std::string fixturePath = (argc > 1) ? argv[1] : PT_FIXTURE_PATH;
+  const std::string generatedDirStr = (argc > 2) ? argv[2] : PT_GENERATED_DIR;
   const ValidationGate gate{};
 
   std::vector<FixtureSpec> fixtures;
-  if (!loadFixtures(kFixturePath, &fixtures)) {
-    std::cerr << "failed_to_load_fixture=" << kFixturePath << "\n";
+  if (!loadFixtures(fixturePath, &fixtures)) {
+    std::cerr << "failed_to_load_fixture=" << fixturePath << "\n";
     return 2;
   }
 
-  const std::filesystem::path generatedDir = "dsp/tests/samples/generated";
+  const std::filesystem::path generatedDir = generatedDirStr;
   std::filesystem::create_directories(generatedDir);
 
   bool allPass = true;
@@ -241,9 +262,9 @@ int main() {
         const double cents = 1200.0 * std::log2(frame.freq_hz / f.expectedHz);
         centsAbsSum += std::abs(cents);
         ++centsCount;
+        voicedConfSum += frame.confidence;
+        ++voicedCount;
       }
-      voicedConfSum += frame.confidence;
-      ++voicedCount;
     }
 
     std::vector<float> silence(static_cast<size_t>(cfg.sample_rate_hz), 0.0f);
