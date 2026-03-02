@@ -20,6 +20,7 @@ Frames emitted to Flutter use the strict map shape expected by `DspFrame.fromJso
 
 - AAudio callback performs DSP processing and pushes frames into a lock-free single-producer/single-consumer ring.
 - JNI → Flutter map emission is done on a background emitter thread (not from the realtime callback).
+- Ring buffer overflow now increments a dropped-frame counter and logs periodically to aid on-device diagnostics.
 - This removes JVM attach and Flutter channel calls from callback context.
 
 ## Permission + lifecycle behavior
@@ -29,6 +30,8 @@ Frames emitted to Flutter use the strict map shape expected by `DspFrame.fromJso
 - Start/stop are idempotent.
 - On pause/focus loss: capture stops and remembers restart intent.
 - On resume/route-change (device add/remove): capture restarts only when previously active and permission still granted.
+- Device route change restarts are debounced (~300ms) to prevent restart storms during churn.
+- Audio focus-loss handling now guards against focus/start-stop loops by separating focus-driven and manual stop flows.
 
 ## Host-app integration checklist (required before shipping)
 

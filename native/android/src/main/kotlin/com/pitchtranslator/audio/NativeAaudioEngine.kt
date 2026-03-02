@@ -12,7 +12,9 @@ class NativeAaudioEngine(private val onFrame: (Map<String, Any?>) -> Unit) {
   @Synchronized
   fun start() {
     if (handle != 0L) return
-    handle = nativeStart()
+    val started = nativeStart()
+    require(started != 0L) { "Failed to start native AAudio engine" }
+    handle = started
   }
 
   @Synchronized

@@ -14,10 +14,13 @@ Frames emitted to Flutter use the strict map shape expected by `DspFrame.fromJso
 - Vibrato keys: `detected`, `rate_hz`, `depth_cents`
 - No-pitch values are emitted natively as null-compatible values (`NSNull`) with confidence clamped to `[0,1]`.
 
-## Permission + lifecycle behavior
+## Session configuration + lifecycle behavior
 
-- `start` now requests microphone permission through `AVAudioSession.requestRecordPermission` when needed.
+- `start` requests microphone permission through `AVAudioSession.requestRecordPermission` when needed.
+- Session category defaults to training-friendly measurement capture and supports optional mixing (`allow_mixing`) via Flutter start arguments.
+- Optional frame decimation can be enabled with `target_frame_fps` (for lightweight 20–30 fps UI updates) without changing DSP internals.
 - Start/stop are idempotent.
+- Stop/failure teardown consistently removes taps, stops engine, frees DSP handle, and deactivates the audio session.
 - Interruption begin stops capture and records resume intent.
 - Interruption end, route changes, and foreground transitions only restart when capture was previously active.
 

@@ -8,6 +8,9 @@ import android.content.pm.PackageManager
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -41,20 +44,23 @@ class PitchTranslatorAudioPlugin :
   private lateinit var audioManager: AudioManager
   private var focusListener: AudioManager.OnAudioFocusChangeListener? = null
   private var pendingPermissionResult: MethodChannel.Result? = null
+  private var suppressFocusLoop = false
+  private val deviceRestartHandler = Handler(Looper.getMainLooper())
+
+  private val debouncedDeviceRestart = Runnable {
+    if (!engine.isRunning() || suppressFocusLoop) return@Runnable
+    Log.i(TAG, "Restarting audio engine after debounced device route change")
+    engine.stop()
+    engine.start()
+  }
 
   private val deviceCallback = object : AudioDeviceCallback() {
     override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
-      if (engine.isRunning()) {
-        engine.stop()
-        engine.start()
-      }
+      scheduleDebouncedDeviceRestart()
     }
 
     override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
-      if (engine.isRunning()) {
-        engine.stop()
-        engine.start()
-      }
+      scheduleDebouncedDeviceRestart()
     }
   }
 
@@ -78,6 +84,7 @@ class PitchTranslatorAudioPlugin :
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     audioManager.unregisterAudioDeviceCallback(deviceCallback)
+    deviceRestartHandler.removeCallbacksAndMessages(null)
     engine.stop()
     methodChannel?.setMethodCallHandler(null)
     frameChannel?.setStreamHandler(null)
@@ -89,8 +96,7 @@ class PitchTranslatorAudioPlugin :
     when (call.method) {
       "start" -> startWithPermissions(result)
       "stop" -> {
-        engine.stop()
-        abandonAudioFocus()
+        stopEngineWithFocusRelease()
         result.success(null)
       }
       else -> result.notImplemented()
@@ -103,6 +109,9 @@ class PitchTranslatorAudioPlugin :
 
   override fun onCancel(arguments: Any?) {
     sink = null
+    if (engine.isRunning()) {
+      stopEngineWithFocusRelease()
+    }
   }
 
   private fun startWithPermissions(result: MethodChannel.Result) {
@@ -132,8 +141,12 @@ class PitchTranslatorAudioPlugin :
 
   private fun startEngine(result: MethodChannel.Result) {
     if (requestAudioFocus()) {
-      engine.start()
-      result.success(null)
+      try {
+        engine.start()
+        result.success(null)
+      } catch (error: IllegalArgumentException) {
+        result.error("audio_start_failed", error.message, null)
+      }
     } else {
       result.error("focus_denied", "Unable to obtain audio focus", null)
     }
@@ -148,9 +161,11 @@ class PitchTranslatorAudioPlugin :
 
   private fun requestAudioFocus(): Boolean {
     val listener = AudioManager.OnAudioFocusChangeListener { change ->
-      if (change <= 0) {
-        restartOnResume = engine.isRunning()
+      if (change <= 0 && engine.isRunning()) {
+        restartOnResume = true
+        suppressFocusLoop = true
         engine.stop()
+        suppressFocusLoop = false
       }
     }
     val result = audioManager.requestAudioFocus(
@@ -167,6 +182,17 @@ class PitchTranslatorAudioPlugin :
   private fun abandonAudioFocus() {
     focusListener?.let { audioManager.abandonAudioFocus(it) }
     focusListener = null
+  }
+
+  private fun stopEngineWithFocusRelease() {
+    restartOnResume = false
+    engine.stop()
+    abandonAudioFocus()
+  }
+
+  private fun scheduleDebouncedDeviceRestart() {
+    deviceRestartHandler.removeCallbacks(debouncedDeviceRestart)
+    deviceRestartHandler.postDelayed(debouncedDeviceRestart, DEVICE_RESTART_DEBOUNCE_MS)
   }
 
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -196,7 +222,7 @@ class PitchTranslatorAudioPlugin :
     activity = null
     restartOnResume = false
     pendingPermissionResult = null
-    engine.stop()
+    stopEngineWithFocusRelease()
   }
 
   override fun onPause(owner: LifecycleOwner) {
@@ -205,7 +231,7 @@ class PitchTranslatorAudioPlugin :
   }
 
   override fun onResume(owner: LifecycleOwner) {
-    if (restartOnResume && hasRecordAudioPermission()) {
+    if (restartOnResume && hasRecordAudioPermission() && requestAudioFocus()) {
       restartOnResume = false
       engine.start()
     }
@@ -234,5 +260,7 @@ class PitchTranslatorAudioPlugin :
 
   companion object {
     private const val RECORD_AUDIO_REQUEST_CODE = 34127
+    private const val DEVICE_RESTART_DEBOUNCE_MS = 300L
+    private const val TAG = "PTAudioPlugin"
   }
 }

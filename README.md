@@ -202,6 +202,12 @@ Do not add undocumented smoothing, hidden hysteresis, or platform-specific branc
 
 Completed in-repo implementation work for ship blockers:
 
+
+- Added typed Flutter audio error mapping (`PermissionDenied`, `NoFramesTimeout`, `AudioFocusDenied`, `PluginUnavailable`, `Unknown`) and surfaced actionable user-facing guidance in the live session UI.
+- Added a first-frame health check (default `500ms`, configurable) that force-stops capture and reports a recovery workflow when frames do not arrive.
+- Hardened native lifecycle cleanup: Flutter bridge now owns/closes its stream controller explicitly; stream cancellation and dispose paths shut down native streaming cleanly.
+- Hardened Android plugin runtime behavior with route-change restart debounce and callback-safe focus-loss handling; native ring buffer now tracks/logs dropped frames periodically.
+- Hardened iOS plugin runtime behavior with configurable session mixing mode, optional frame-rate decimation (`target_frame_fps`), and consistent session/DSP release on stop/failure paths.
 - Added iOS podspec wiring (`native/ios/PitchTranslatorAudioPlugin.podspec`) so host CocoaPods integration can compile Swift + ObjC++ bridge + DSP C++ sources.
 - Added Android module template (`native/android/build.gradle.kts`) and manifest permission declaration (`native/android/src/main/AndroidManifest.xml`) for host integration.
 - Added runtime microphone permission flow in both native plugins before capture start.

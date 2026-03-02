@@ -18,6 +18,9 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
   private var shouldResumeOnForeground = false
   private var sampleRate: Int32 = 48_000
   private var hopSize: Int32 = 256
+  private var allowMixing = false
+  private var targetFrameFps = 0
+  private var lastEmitTimestampMs: Int = 0
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let instance = PitchTranslatorAudioPlugin()
@@ -61,12 +64,16 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
 
   func onCancel(withArguments _: Any?) -> FlutterError? {
     eventSink = nil
+    stopCapture()
     return nil
   }
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "start":
+      let arguments = call.arguments as? [String: Any]
+      allowMixing = (arguments?["allow_mixing"] as? Bool) ?? false
+      targetFrameFps = max(0, (arguments?["target_frame_fps"] as? Int) ?? 0)
       requestMicPermission { [weak self] granted in
         guard let self else {
           result(FlutterError(code: "audio_start_failed", message: "Plugin released", details: nil))
@@ -115,14 +122,19 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
       if self.isRunning { return }
 
       do {
-        try self.session.setCategory(.playAndRecord, mode: .measurement, options: [.mixWithOthers, .allowBluetooth])
+        var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
+        if self.allowMixing {
+          options.insert(.mixWithOthers)
+        }
+        try self.session.setCategory(.playAndRecord, mode: .measurement, options: options)
         try self.session.setPreferredIOBufferDuration(0.005)
         try self.session.setPreferredSampleRate(48_000)
-        try self.session.setActive(true, options: .notifyOthersOnDeactivation)
+        try self.session.setActive(true, options: [])
 
         let format = self.engine.inputNode.inputFormat(forBus: 0)
         self.sampleRate = Int32(format.sampleRate)
         self.hopSize = 256
+        self.lastEmitTimestampMs = 0
 
         self.dspHandle = pt_dsp_make(self.sampleRate, self.hopSize)
         guard self.dspHandle != nil else {
@@ -148,6 +160,7 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
         self.isRunning = true
         self.shouldResumeOnForeground = true
       } catch {
+        self.releaseAudioResources()
         capturedError = error
       }
     }
@@ -159,16 +172,25 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
 
   private func stopCapture() {
     stateQueue.sync {
-      guard isRunning else { return }
-      engine.inputNode.removeTap(onBus: 0)
-      engine.stop()
-      if let handle = dspHandle {
-        pt_dsp_free(handle)
-        dspHandle = nil
-      }
-      try? session.setActive(false, options: .notifyOthersOnDeactivation)
-      isRunning = false
+      self.releaseAudioResources()
     }
+  }
+
+  private func releaseAudioResources() {
+    engine.inputNode.removeTap(onBus: 0)
+    if engine.isRunning {
+      engine.stop()
+    }
+    if let handle = dspHandle {
+      pt_dsp_free(handle)
+      dspHandle = nil
+    }
+    do {
+      try session.setActive(false, options: .notifyOthersOnDeactivation)
+    } catch {
+      // Ignore teardown errors.
+    }
+    isRunning = false
   }
 
   private func processAudio(buffer: AVAudioPCMBuffer) {
@@ -178,11 +200,15 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
 
     let frameCount = Int32(buffer.frameLength)
     let frame = pt_dsp_run(dsp, channel, frameCount)
+    let timestampMs = Int(frame.timestamp_ms)
+    if shouldDropFrame(timestampMs: timestampMs) {
+      return
+    }
 
     emitQueue.async { [weak self] in
       guard self?.isRunning == true else { return }
       sink([
-        "timestamp_ms": Int(frame.timestamp_ms),
+        "timestamp_ms": timestampMs,
         "freq_hz": frame.freq_hz.isFinite ? frame.freq_hz : NSNull(),
         "midi_float": frame.midi_float.isFinite ? frame.midi_float : NSNull(),
         "nearest_midi": frame.nearest_midi >= 0 ? frame.nearest_midi : NSNull(),
@@ -195,6 +221,16 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
         ],
       ])
     }
+  }
+
+  private func shouldDropFrame(timestampMs: Int) -> Bool {
+    guard targetFrameFps > 0 else { return false }
+    let minDeltaMs = max(1, 1000 / targetFrameFps)
+    if lastEmitTimestampMs == 0 || (timestampMs - lastEmitTimestampMs) >= minDeltaMs {
+      lastEmitTimestampMs = timestampMs
+      return false
+    }
+    return true
   }
 
   @objc private func onInterruption(_ notification: Notification) {
