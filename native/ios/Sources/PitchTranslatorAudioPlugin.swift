@@ -20,7 +20,7 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
   private var hopSize: Int32 = 256
   private var allowMixing = false
   private var targetFrameFps = 0
-  private var lastEmitTimestampMs: Int = 0
+  private var lastEmitTimestampMs: Int = -1
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let instance = PitchTranslatorAudioPlugin()
@@ -134,7 +134,7 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
         let format = self.engine.inputNode.inputFormat(forBus: 0)
         self.sampleRate = Int32(format.sampleRate)
         self.hopSize = 256
-        self.lastEmitTimestampMs = 0
+        self.lastEmitTimestampMs = -1
 
         self.dspHandle = pt_dsp_make(self.sampleRate, self.hopSize)
         guard self.dspHandle != nil else {
@@ -226,7 +226,7 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
   private func shouldDropFrame(timestampMs: Int) -> Bool {
     guard targetFrameFps > 0 else { return false }
     let minDeltaMs = max(1, 1000 / targetFrameFps)
-    if lastEmitTimestampMs == 0 || (timestampMs - lastEmitTimestampMs) >= minDeltaMs {
+    if lastEmitTimestampMs < 0 || (timestampMs - lastEmitTimestampMs) >= minDeltaMs {
       lastEmitTimestampMs = timestampMs
       return false
     }
