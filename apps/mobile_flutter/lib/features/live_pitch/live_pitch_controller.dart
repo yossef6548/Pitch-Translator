@@ -50,11 +50,11 @@ class LivePitchController extends ChangeNotifier {
   }
 
   Future<void> startSession() async {
-    _startedAtMs ??= DateTime.now().millisecondsSinceEpoch;
     _resetMetrics();
     await _bridge.start();
     _engine.onIntent(TrainingIntent.start);
-    _viewModel = _viewModel.copyWith(running: true, uiState: _engine.state);
+    _viewModel = const LivePitchViewModel.initial()
+        .copyWith(running: true, uiState: _engine.state);
     notifyListeners();
   }
 
@@ -114,6 +114,7 @@ class LivePitchController extends ChangeNotifier {
         sessionId: sessionId,
         events: _driftEvents,
       );
+      _startedAtMs = null;
     } catch (error) {
       throw SessionPersistenceError('Failed to persist session: $error');
     }
@@ -122,6 +123,7 @@ class LivePitchController extends ChangeNotifier {
   @override
   void dispose() {
     unawaited(_frameSubscription?.cancel());
+    unawaited(_bridge.stop());
     unawaited(_bridge.dispose());
     super.dispose();
   }
@@ -150,7 +152,7 @@ class LivePitchController extends ChangeNotifier {
         _driftEvents.add(
           DriftEventWrite(
             eventIndex: _driftEvents.length,
-            confirmedAtMs: drift.after.timestampMs,
+            confirmedAtMs: DateTime.now().millisecondsSinceEpoch,
             beforeMidi: drift.before.nearestMidi,
             beforeCents: drift.before.centsError,
             beforeFreqHz: drift.before.freqHz,
