@@ -72,19 +72,43 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
                   spacing: 8,
                   children: [
                     FilledButton(
-                      onPressed: _controller.startSession,
+                      onPressed: () async {
+                        try {
+                          await _controller.startSession();
+                        } catch (e, st) {
+                          debugPrint('Error starting session: $e\n$st');
+                        }
+                      },
                       child: const Text('Start'),
                     ),
                     OutlinedButton(
-                      onPressed: _controller.pause,
+                      onPressed: () async {
+                        try {
+                          await _controller.pause();
+                        } catch (e, st) {
+                          debugPrint('Error pausing session: $e\n$st');
+                        }
+                      },
                       child: const Text('Pause'),
                     ),
                     OutlinedButton(
-                      onPressed: _controller.resume,
+                      onPressed: () async {
+                        try {
+                          await _controller.resume();
+                        } catch (e, st) {
+                          debugPrint('Error resuming session: $e\n$st');
+                        }
+                      },
                       child: const Text('Resume'),
                     ),
                     OutlinedButton(
-                      onPressed: _controller.stopSession,
+                      onPressed: () async {
+                        try {
+                          await _controller.stopSession();
+                        } catch (e, st) {
+                          debugPrint('Error stopping session: $e\n$st');
+                        }
+                      },
                       child: const Text('Stop'),
                     ),
                   ],

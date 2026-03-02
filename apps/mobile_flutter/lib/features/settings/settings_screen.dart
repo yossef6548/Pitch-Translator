@@ -21,6 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _showNumericOverlay = prefs.getBool(_numericOverlayKey) ?? true;
     });
@@ -29,6 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setNumericOverlay(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_numericOverlayKey, value);
+    if (!mounted) return;
     setState(() => _showNumericOverlay = value);
   }
 
