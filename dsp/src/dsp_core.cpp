@@ -244,7 +244,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
 
     for (int divisor = 2; divisor <= 4; ++divisor) {
         const int harmonic_lag = best_lag / divisor;
-        if (harmonic_lag < min_lag) {
+        if (harmonic_lag < min_lag || harmonic_lag > max_lag) {
             continue;
         }
         if (cmndf[harmonic_lag] <= std::min(0.2, best_cmndf * 1.35)) {
@@ -314,9 +314,10 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
         double max_c = -1e9;
         double oldest_t = out.timestamp_ms;
         for (int i = 0; i < dsp->history_count; ++i) {
-            min_c = std::min(min_c, dsp->recent_cents[i]);
-            max_c = std::max(max_c, dsp->recent_cents[i]);
-            oldest_t = std::min(oldest_t, dsp->recent_time_ms[i]);
+            const int idx = wrap_history_index(dsp->history_head, i, dsp->history_count);
+            min_c = std::min(min_c, dsp->recent_cents[idx]);
+            max_c = std::max(max_c, dsp->recent_cents[idx]);
+            oldest_t = std::min(oldest_t, dsp->recent_time_ms[idx]);
         }
         const double duration_s = std::max(1e-6, (out.timestamp_ms - oldest_t) / 1000.0);
         const double depth = (max_c - min_c) * 0.5;
