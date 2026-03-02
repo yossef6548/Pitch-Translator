@@ -174,6 +174,23 @@ UI output must remain a pure function of:
 Do not add undocumented smoothing, hidden hysteresis, or platform-specific branching that changes visible outcomes for identical input traces.
 
 
+
+## Latest native hardening progress (this pass)
+
+Completed in-repo implementation work for ship blockers:
+
+- Added iOS podspec wiring (`native/ios/PitchTranslatorAudioPlugin.podspec`) so host CocoaPods integration can compile Swift + ObjC++ bridge + DSP C++ sources.
+- Added Android module template (`native/android/build.gradle.kts`) and manifest permission declaration (`native/android/src/main/AndroidManifest.xml`) for host integration.
+- Added runtime microphone permission flow in both native plugins before capture start.
+- Tightened lifecycle idempotency: start/stop, interruption/resume, pause/resume, and route-change restart gates now track prior running intent.
+- Moved Android frame emission off the realtime callback path with a lock-free ring buffer + background emitter thread.
+- Upgraded DSP validation executable to enforce pass/fail thresholds and non-zero exit on regression.
+
+### Current hard blocker status
+
+- Real-device 30+ minute capture and latency matrix **cannot be completed inside this container** and must be executed on physical iOS/Android devices.
+- Updated `pt_dsp_voice_validation` now fails intentionally when vibrato/high-register scenarios exceed thresholds, so the binary acts as a real ship gate.
+
 ## Synthetic DSP validation snapshot (this pass)
 
 Command: `/tmp/pt-dsp-build/pt_dsp_voice_validation`

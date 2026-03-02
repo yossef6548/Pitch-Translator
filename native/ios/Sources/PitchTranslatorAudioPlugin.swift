@@ -15,6 +15,7 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
   private var eventSink: FlutterEventSink?
   private var dspHandle: UnsafeMutableRawPointer?
   private var isRunning = false
+  private var shouldResumeOnForeground = false
   private var sampleRate: Int32 = 48_000
   private var hopSize: Int32 = 256
 
@@ -66,17 +67,44 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "start":
-      do {
-        try startCapture()
-        result(nil)
-      } catch {
-        result(FlutterError(code: "audio_start_failed", message: error.localizedDescription, details: nil))
+      requestMicPermission { [weak self] granted in
+        guard let self else {
+          result(FlutterError(code: "audio_start_failed", message: "Plugin released", details: nil))
+          return
+        }
+        guard granted else {
+          result(FlutterError(code: "permission_denied", message: "Microphone permission denied", details: nil))
+          return
+        }
+
+        do {
+          try self.startCapture()
+          result(nil)
+        } catch {
+          result(FlutterError(code: "audio_start_failed", message: error.localizedDescription, details: nil))
+        }
       }
     case "stop":
+      shouldResumeOnForeground = false
       stopCapture()
       result(nil)
     default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func requestMicPermission(completion: @escaping (Bool) -> Void) {
+    switch session.recordPermission {
+    case .granted:
+      completion(true)
+    case .denied:
+      completion(false)
+    case .undetermined:
+      session.requestRecordPermission { granted in
+        completion(granted)
+      }
+    @unknown default:
+      completion(false)
     }
   }
 
@@ -118,6 +146,7 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
         self.engine.prepare()
         try self.engine.start()
         self.isRunning = true
+        self.shouldResumeOnForeground = true
       } catch {
         capturedError = error
       }
@@ -173,12 +202,14 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
           let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
 
     if type == .began {
+      stateQueue.sync { shouldResumeOnForeground = isRunning }
       stopCapture()
       return
     }
 
     if type == .ended {
-      try? startCapture()
+      let shouldResume: Bool = stateQueue.sync { shouldResumeOnForeground }
+      if shouldResume { try? startCapture() }
     }
   }
 
@@ -186,15 +217,15 @@ final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterStreamHa
     guard let reasonRaw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
           let reason = AVAudioSession.RouteChangeReason(rawValue: reasonRaw) else { return }
 
-    if reason == .oldDeviceUnavailable || reason == .newDeviceAvailable {
+    let wasRunning: Bool = stateQueue.sync { isRunning }
+    if (reason == .oldDeviceUnavailable || reason == .newDeviceAvailable), wasRunning {
       stopCapture()
       try? startCapture()
     }
   }
 
   @objc private func onForeground() {
-    if !isRunning {
-      try? startCapture()
-    }
+    let shouldResume: Bool = stateQueue.sync { shouldResumeOnForeground && !isRunning }
+    if shouldResume { try? startCapture() }
   }
 }
