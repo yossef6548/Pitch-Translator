@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
+import '../../exercises/exercise_catalog.dart';
 import '../../analytics/session_repository.dart';
 import '../../audio/native_audio_bridge.dart';
 import '../../core/errors.dart';
@@ -42,20 +43,44 @@ class LivePitchController extends ChangeNotifier {
   final List<double> _absErrors = <double>[];
   final List<DriftEventWrite> _driftEvents = <DriftEventWrite>[];
   int _lastRecordedDriftTimestamp = -1;
+  Completer<void>? _firstFrameCompleter;
 
   Future<void> init() async {
-    _frameSubscription = _bridge.frames().listen(_onFrame, onError: (error) {
-      AppLogger.error('Audio frame stream failed', error);
-    });
+    _frameSubscription = _bridge.frames().listen(
+      _onFrame,
+      onError: (error) {
+        AppLogger.error('Audio frame stream failed', error);
+      },
+    );
   }
 
   Future<void> startSession() async {
     _resetMetrics();
-    await _bridge.start();
-    _engine.onIntent(TrainingIntent.start);
-    _viewModel = const LivePitchViewModel.initial()
-        .copyWith(running: true, uiState: _engine.state);
-    notifyListeners();
+    _firstFrameCompleter = Completer<void>();
+    try {
+      await _bridge.start();
+      await _firstFrameCompleter!.future.timeout(
+        _bridge.firstFrameTimeout,
+        onTimeout: () async {
+          await _bridge.stop();
+          throw AudioBridgeException(AudioBridgeFailure.noFramesTimeout);
+        },
+      );
+      _engine.onIntent(TrainingIntent.start);
+      _viewModel = const LivePitchViewModel.initial().copyWith(
+        running: true,
+        uiState: _engine.state,
+        clearError: true,
+      );
+      notifyListeners();
+    } on AudioBridgeException catch (error) {
+      _viewModel = _viewModel.copyWith(
+        running: false,
+        errorMessage: _toActionableMessage(error.failure),
+      );
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> pause() async {
@@ -68,7 +93,11 @@ class LivePitchController extends ChangeNotifier {
   Future<void> resume() async {
     await _bridge.start();
     _engine.onIntent(TrainingIntent.resume);
-    _viewModel = _viewModel.copyWith(running: true, uiState: _engine.state);
+    _viewModel = _viewModel.copyWith(
+      running: true,
+      uiState: _engine.state,
+      clearError: true,
+    );
     notifyListeners();
   }
 
@@ -83,8 +112,9 @@ class LivePitchController extends ChangeNotifier {
     if (startedAtMs == null) return;
 
     try {
-      final avgError =
-          _absErrors.isEmpty ? 0.0 : _absErrors.reduce((a, b) => a + b) / _absErrors.length;
+      final avgError = _absErrors.isEmpty
+          ? 0.0
+          : _absErrors.reduce((a, b) => a + b) / _absErrors.length;
       final stability = _activeDurationMs == 0
           ? 0.0
           : (_lockedDurationMs / _activeDurationMs).clamp(0.0, 1.0) * 100.0;
@@ -129,6 +159,9 @@ class LivePitchController extends ChangeNotifier {
   }
 
   void _onFrame(DspFrame frame) {
+    if (_firstFrameCompleter != null && !_firstFrameCompleter!.isCompleted) {
+      _firstFrameCompleter!.complete();
+    }
     _engine.onDspFrame(frame);
 
     if (_viewModel.running) {
@@ -147,7 +180,8 @@ class LivePitchController extends ChangeNotifier {
       }
 
       final drift = _engine.lastDriftEvent;
-      if (drift != null && drift.after.timestampMs > _lastRecordedDriftTimestamp) {
+      if (drift != null &&
+          drift.after.timestampMs > _lastRecordedDriftTimestamp) {
         _lastRecordedDriftTimestamp = drift.after.timestampMs;
         _driftEvents.add(
           DriftEventWrite(
@@ -164,8 +198,9 @@ class LivePitchController extends ChangeNotifier {
       }
     }
 
-    final avgError =
-        _absErrors.isEmpty ? 0.0 : _absErrors.reduce((a, b) => a + b) / _absErrors.length;
+    final avgError = _absErrors.isEmpty
+        ? 0.0
+        : _absErrors.reduce((a, b) => a + b) / _absErrors.length;
     final stability = _activeDurationMs == 0
         ? 0.0
         : (_lockedDurationMs / _activeDurationMs).clamp(0.0, 1.0) * 100.0;
@@ -177,6 +212,21 @@ class LivePitchController extends ChangeNotifier {
       duration: Duration(milliseconds: _activeDurationMs),
     );
     notifyListeners();
+  }
+
+  String _toActionableMessage(AudioBridgeFailure failure) {
+    switch (failure) {
+      case AudioBridgeFailure.permissionDenied:
+        return 'Microphone permission is denied. Enable it in system settings and retry.';
+      case AudioBridgeFailure.noFramesTimeout:
+        return 'Audio started but no frames arrived. Check mic availability, close other audio apps, then retry.';
+      case AudioBridgeFailure.audioFocusDenied:
+        return 'Another app has exclusive audio focus. Pause other media/recorders and retry.';
+      case AudioBridgeFailure.pluginUnavailable:
+        return 'Native audio engine is unavailable on this build. Restart the app or reinstall the latest version.';
+      case AudioBridgeFailure.unknown:
+        return 'Unexpected audio error. Restart the app and try again.';
+    }
   }
 
   void _resetMetrics() {

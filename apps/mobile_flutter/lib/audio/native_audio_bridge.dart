@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
+import '../core/errors.dart';
+
 /// Audio bridge that prefers native EventChannel streaming and falls back to a
 /// deterministic simulator when native integration is unavailable.
 class NativeAudioBridge {
@@ -12,11 +14,18 @@ class NativeAudioBridge {
     EventChannel? frameChannel,
     MethodChannel? controlChannel,
     bool? enableSimulationFallback,
+    Duration? firstFrameTimeout,
+    bool allowMixing = false,
+    int? targetFrameFps,
   })  : _frameChannel =
             frameChannel ?? const EventChannel(_defaultFrameChannelName),
         _controlChannel =
             controlChannel ?? const MethodChannel(_defaultControlChannelName),
-        enableSimulationFallback = enableSimulationFallback ?? !kReleaseMode;
+        enableSimulationFallback = enableSimulationFallback ?? !kReleaseMode,
+        firstFrameTimeout =
+            firstFrameTimeout ?? const Duration(milliseconds: 500),
+        allowMixing = allowMixing,
+        targetFrameFps = targetFrameFps;
 
   static const String _defaultFrameChannelName = 'pt/audio/frames';
   static const String _defaultControlChannelName = 'pt/audio/control';
@@ -27,8 +36,16 @@ class NativeAudioBridge {
   /// In release builds the default is false so production binaries fail fast if
   /// native streaming is missing. Debug/profile builds default to true for QA.
   final bool enableSimulationFallback;
+  final Duration firstFrameTimeout;
+
+  /// Forwarded to native platforms that can tolerate background mixing.
+  final bool allowMixing;
+
+  /// Forwarded to native platforms to optionally decimate emitted frame rate.
+  final int? targetFrameFps;
 
   Stream<DspFrame>? _cachedStream;
+  StreamController<DspFrame>? _frameController;
   StreamSubscription<DspFrame>? _cachedSubscription;
   static bool _isRunning = false;
 
@@ -36,13 +53,13 @@ class NativeAudioBridge {
 
   Stream<DspFrame> frames() {
     if (_cachedStream == null) {
-      final controller = StreamController<DspFrame>.broadcast();
+      _frameController = StreamController<DspFrame>.broadcast();
       _cachedSubscription = _createFrameStream().listen(
-        controller.add,
-        onError: controller.addError,
-        onDone: controller.close,
+        _frameController!.add,
+        onError: _frameController!.addError,
+        onDone: _frameController!.close,
       );
-      _cachedStream = controller.stream;
+      _cachedStream = _frameController!.stream;
     }
     return _cachedStream!;
   }
@@ -50,12 +67,19 @@ class NativeAudioBridge {
   Future<void> dispose() async {
     await _cachedSubscription?.cancel();
     _cachedSubscription = null;
+    if (_frameController != null && !_frameController!.isClosed) {
+      await _frameController!.close();
+    }
+    _frameController = null;
     _cachedStream = null;
   }
 
   Future<bool> _tryStartNative() async {
     try {
-      await _controlChannel.invokeMethod<void>('start');
+      await _controlChannel.invokeMethod<void>('start', <String, dynamic>{
+        'allow_mixing': allowMixing,
+        if (targetFrameFps != null) 'target_frame_fps': targetFrameFps,
+      });
       _isRunning = true;
       return true;
     } on MissingPluginException {
@@ -63,25 +87,66 @@ class NativeAudioBridge {
         rethrow;
       }
       return false;
+    } on PlatformException catch (e) {
+      throw _mapPlatformError(e);
     }
   }
 
   Future<void> start() async {
-    final started = await _tryStartNative();
-    if (!started && !enableSimulationFallback) {
-      throw MissingPluginException('Native audio start is unavailable.');
+    try {
+      final started = await _tryStartNative();
+      if (!started && !enableSimulationFallback) {
+        throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
+      }
+    } on MissingPluginException {
+      throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
+    } on AudioBridgeException {
+      rethrow;
+    } catch (error) {
+      throw AudioBridgeException(AudioBridgeFailure.unknown, details: '$error');
     }
   }
 
   Future<void> stop() async {
     try {
       await _controlChannel.invokeMethod<void>('stop');
-      _isRunning = false;
     } on MissingPluginException {
       if (!enableSimulationFallback) {
-        rethrow;
+        throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
       }
+    } on PlatformException catch (e) {
+      throw _mapPlatformError(e);
+    } catch (error) {
+      throw AudioBridgeException(AudioBridgeFailure.unknown, details: '$error');
+    } finally {
+      _isRunning = false;
     }
+  }
+
+  AudioBridgeException _mapPlatformError(PlatformException error) {
+    final code = error.code.toLowerCase();
+    if (code.contains('permission')) {
+      return AudioBridgeException(
+        AudioBridgeFailure.permissionDenied,
+        details: error.message,
+      );
+    }
+    if (code.contains('focus')) {
+      return AudioBridgeException(
+        AudioBridgeFailure.audioFocusDenied,
+        details: error.message,
+      );
+    }
+    if (code.contains('missing_plugin') || code.contains('unavailable')) {
+      return AudioBridgeException(
+        AudioBridgeFailure.pluginUnavailable,
+        details: error.message,
+      );
+    }
+    return AudioBridgeException(
+      AudioBridgeFailure.unknown,
+      details: '${error.code}: ${error.message}',
+    );
   }
 
   Stream<DspFrame> _createFrameStream() async* {
@@ -99,17 +164,19 @@ class NativeAudioBridge {
       return;
     }
 
-    final started = await _tryStartNative();
+    final started;
+    try {
+      started = await _tryStartNative();
+    } on MissingPluginException {
+      throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
+    }
     if (!started) {
-      throw MissingPluginException(
-        'Native audio start is unavailable and simulation fallback is disabled.',
-      );
+      throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
     }
     yield* _nativeFrameStream();
   }
 
   Stream<DspFrame> _nativeFrameStream() {
-    // No initialization parameters are required by the native audio frame stream.
     return _frameChannel
         .receiveBroadcastStream(null)
         .map((dynamic event) => _frameFromEvent(event));
@@ -163,7 +230,6 @@ class NativeAudioBridge {
 
       final detectedRaw = v['detected'];
       if (detectedRaw is bool) {
-        // already valid
       } else if (detectedRaw == null) {
         v['detected'] = false;
       } else if (detectedRaw is num) {
@@ -180,7 +246,6 @@ class NativeAudioBridge {
     try {
       return DspFrame.fromJson(normalized);
     } on FormatException catch (e) {
-      // Provide more helpful context if the payload schema is invalid or keys are unexpected.
       throw FormatException(
         'Invalid native audio frame payload. Received keys: '
         '${normalized.keys.toList()} (${e.message})',

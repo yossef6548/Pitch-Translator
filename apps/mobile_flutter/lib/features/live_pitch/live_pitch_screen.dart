@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
+import '../../exercises/exercise_catalog.dart';
 import 'live_pitch_controller.dart';
 import 'widgets/live_pitch_meter.dart';
 import 'widgets/session_metrics_panel.dart';
@@ -54,13 +55,25 @@ class _LivePitchScreenState extends State<LivePitchScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Target: ${widget.config.targetNote}${widget.config.targetOctave}'),
+                Text(
+                  'Target: ${widget.config.targetNote}${widget.config.targetOctave}',
+                ),
                 const SizedBox(height: 16),
                 LivePitchMeter(state: vm.uiState),
                 const SizedBox(height: 16),
                 Text('State: ${vm.uiState.id.name}'),
                 Text('Cents: ${vm.uiState.displayCents} ${vm.uiState.arrow}'),
                 const SizedBox(height: 16),
+                if (vm.errorMessage != null) ...[
+                  Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(vm.errorMessage!),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 SessionMetricsPanel(
                   avgErrorCents: vm.avgErrorCents,
                   stabilityScore: vm.stabilityScore,

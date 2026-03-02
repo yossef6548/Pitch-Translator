@@ -1,5 +1,6 @@
 #include <aaudio/AAudio.h>
 #include <jni.h>
+#include <android/log.h>
 
 #include <algorithm>
 #include <atomic>
@@ -10,6 +11,8 @@
 
 namespace {
 constexpr int kFrameQueueSize = 1024;
+constexpr uint64_t kDropLogPeriod = 200;
+constexpr const char* kLogTag = "PTAudioEngine";
 
 struct QueuedFrame {
   DSPFrameOutput frame{};
@@ -20,11 +23,16 @@ struct FrameRing {
   QueuedFrame items[kFrameQueueSize]{};
   std::atomic<uint32_t> write_index{0};
   std::atomic<uint32_t> read_index{0};
+  std::atomic<uint64_t> dropped_frames{0};
 
   bool push(const DSPFrameOutput& frame) {
     const uint32_t write = write_index.load(std::memory_order_relaxed);
     const uint32_t next = (write + 1u) % kFrameQueueSize;
     if (next == read_index.load(std::memory_order_acquire)) {
+      const uint64_t dropped = dropped_frames.fetch_add(1, std::memory_order_relaxed) + 1;
+      if (dropped % kDropLogPeriod == 0) {
+        __android_log_print(ANDROID_LOG_WARN, kLogTag, "Dropped %llu frames due to ring-buffer overflow", static_cast<unsigned long long>(dropped));
+      }
       return false;
     }
     items[write].frame = frame;
