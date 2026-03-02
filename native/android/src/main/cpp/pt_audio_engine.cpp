@@ -14,6 +14,33 @@ constexpr int kFrameQueueSize = 1024;
 constexpr uint64_t kDropLogPeriod = 200;
 constexpr const char* kLogTag = "PTAudioEngine";
 
+inline double sanitizeFinite(double value, double fallbackNan = NAN) {
+  return std::isfinite(value) ? value : fallbackNan;
+}
+
+inline DSPFrameOutput sanitizeFrameForBridge(const DSPFrameOutput& in) {
+  DSPFrameOutput out = in;
+  out.timestamp_ms = std::max(0.0, sanitizeFinite(out.timestamp_ms, 0.0));
+  out.confidence = std::clamp(sanitizeFinite(out.confidence, 0.0), 0.0, 1.0);
+  out.freq_hz = sanitizeFinite(out.freq_hz);
+  out.midi_float = sanitizeFinite(out.midi_float);
+  out.cents_error = sanitizeFinite(out.cents_error);
+  out.vibrato_rate_hz = sanitizeFinite(out.vibrato_rate_hz);
+  out.vibrato_depth_cents = sanitizeFinite(out.vibrato_depth_cents);
+  if (!std::isfinite(out.freq_hz) || out.freq_hz <= 0.0) {
+    out.freq_hz = NAN;
+    out.midi_float = NAN;
+    out.nearest_midi = -1;
+    out.cents_error = NAN;
+    out.confidence = 0.0;
+  }
+  if (!out.vibrato_detected) {
+    out.vibrato_rate_hz = NAN;
+    out.vibrato_depth_cents = NAN;
+  }
+  return out;
+}
+
 struct QueuedFrame {
   DSPFrameOutput frame{};
   bool valid = false;
@@ -106,18 +133,19 @@ static void emitFramesOnBackgroundThread(Engine* engine) {
     bool drained_any = false;
     while (engine->ring.pop(&frame)) {
       drained_any = true;
+      const DSPFrameOutput safe = sanitizeFrameForBridge(frame);
       guard.env->CallVoidMethod(
           engine->plugin_obj,
           engine->on_frame,
-          frame.timestamp_ms,
-          frame.freq_hz,
-          frame.midi_float,
-          frame.nearest_midi,
-          frame.cents_error,
-          std::clamp(frame.confidence, 0.0, 1.0),
-          frame.vibrato_detected,
-          frame.vibrato_rate_hz,
-          frame.vibrato_depth_cents);
+          safe.timestamp_ms,
+          safe.freq_hz,
+          safe.midi_float,
+          safe.nearest_midi,
+          safe.cents_error,
+          safe.confidence,
+          safe.vibrato_detected,
+          safe.vibrato_rate_hz,
+          safe.vibrato_depth_cents);
     }
 
     if (!drained_any) {
@@ -127,18 +155,19 @@ static void emitFramesOnBackgroundThread(Engine* engine) {
 
   DSPFrameOutput frame{};
   while (engine->ring.pop(&frame)) {
+    const DSPFrameOutput safe = sanitizeFrameForBridge(frame);
     guard.env->CallVoidMethod(
         engine->plugin_obj,
         engine->on_frame,
-        frame.timestamp_ms,
-        frame.freq_hz,
-        frame.midi_float,
-        frame.nearest_midi,
-        frame.cents_error,
-        std::clamp(frame.confidence, 0.0, 1.0),
-        frame.vibrato_detected,
-        frame.vibrato_rate_hz,
-        frame.vibrato_depth_cents);
+        safe.timestamp_ms,
+        safe.freq_hz,
+        safe.midi_float,
+        safe.nearest_midi,
+        safe.cents_error,
+        safe.confidence,
+        safe.vibrato_detected,
+        safe.vibrato_rate_hz,
+        safe.vibrato_depth_cents);
   }
 }
 

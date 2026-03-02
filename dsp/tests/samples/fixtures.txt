@@ -1,0 +1,6 @@
+# name,expected_hz,base_hz,duration_seconds,vibrato_depth,vibrato_rate_hz,noise_amp,amplitude
+fixture_low_clear,196.00,196.00,2.5,0.000,5.0,0.002,0.72
+fixture_mid_soft_vibrato,220.00,220.00,2.5,0.008,5.5,0.003,0.70
+fixture_a4_bright,440.00,440.00,2.5,0.003,5.0,0.004,0.68
+fixture_e4_noisy,329.63,329.63,2.5,0.004,5.0,0.008,0.66
+fixture_c4_vibrato,261.63,261.63,2.5,0.010,6.0,0.005,0.70

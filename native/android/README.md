@@ -14,7 +14,8 @@ Frames emitted to Flutter use the strict map shape expected by `DspFrame.fromJso
 
 - Top-level keys: `timestamp_ms`, `freq_hz`, `midi_float`, `nearest_midi`, `cents_error`, `confidence`, `vibrato`
 - Vibrato keys: `detected`, `rate_hz`, `depth_cents`
-- No-pitch frames emit nullables directly (`freq_hz`, `midi_float`, `nearest_midi`, `cents_error`, vibrato rate/depth) and clamp confidence to `[0,1]` natively.
+- JNI bridge sanitizes/clamps all DSP scalars (finite checks + confidence clamp + no-pitch normalization) before Kotlin/Dart map emission.
+- No-pitch frames emit nullables directly (`freq_hz`, `midi_float`, `nearest_midi`, `cents_error`, vibrato rate/depth) with confidence clamped to `[0,1]` natively.
 
 ## Realtime safety model
 

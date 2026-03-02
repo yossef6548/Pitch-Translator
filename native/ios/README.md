@@ -12,6 +12,7 @@ Frames emitted to Flutter use the strict map shape expected by `DspFrame.fromJso
 
 - Top-level keys: `timestamp_ms`, `freq_hz`, `midi_float`, `nearest_midi`, `cents_error`, `confidence`, `vibrato`
 - Vibrato keys: `detected`, `rate_hz`, `depth_cents`
+- ObjC++ bridge sanitizes/clamps all DSP scalars (finite checks + confidence clamp + no-pitch normalization) before Swift/Dart map emission.
 - No-pitch values are emitted natively as null-compatible values (`NSNull`) with confidence clamped to `[0,1]`.
 
 ## Session configuration + lifecycle behavior

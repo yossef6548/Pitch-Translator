@@ -12,6 +12,7 @@ constexpr int kMaxFreqHz = 1100;
 constexpr int kHistorySize = 64;
 constexpr double kYinThreshold = 0.12;
 constexpr double kMaxTrackingJumpCents = 700.0;
+constexpr double kUnvoicedEnergyFloor = 1e-6;
 
 inline double hz_to_midi(double hz, double a4_hz) {
     return 69.0 + 12.0 * std::log2(hz / a4_hz);
@@ -23,6 +24,39 @@ inline double midi_to_hz(double midi, double a4_hz) {
 
 inline bool is_finite_positive(double v) {
     return std::isfinite(v) && v > 0.0;
+}
+
+inline double sanitize_scalar_or_nan(double v) {
+    return std::isfinite(v) ? v : NAN;
+}
+
+inline double sanitize_confidence(double v) {
+    if (!std::isfinite(v)) {
+        return 0.0;
+    }
+    return std::clamp(v, 0.0, 1.0);
+}
+
+inline void sanitize_output(DSPFrameOutput* out) {
+    out->timestamp_ms = std::max(0.0, sanitize_scalar_or_nan(out->timestamp_ms));
+    out->freq_hz = sanitize_scalar_or_nan(out->freq_hz);
+    out->midi_float = sanitize_scalar_or_nan(out->midi_float);
+    out->cents_error = sanitize_scalar_or_nan(out->cents_error);
+    out->confidence = sanitize_confidence(out->confidence);
+    out->vibrato_rate_hz = sanitize_scalar_or_nan(out->vibrato_rate_hz);
+    out->vibrato_depth_cents = sanitize_scalar_or_nan(out->vibrato_depth_cents);
+
+    if (!is_finite_positive(out->freq_hz)) {
+        out->freq_hz = NAN;
+        out->midi_float = NAN;
+        out->nearest_midi = -1;
+        out->cents_error = NAN;
+        out->confidence = 0.0;
+    }
+    if (!out->vibrato_detected) {
+        out->vibrato_rate_hz = NAN;
+        out->vibrato_depth_cents = NAN;
+    }
 }
 }  // namespace
 
@@ -166,6 +200,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
 
     if (!dsp || !mono_samples || num_samples <= 0) {
         out.timestamp_ms = 0.0;
+        sanitize_output(&out);
         return out;
     }
 
@@ -177,6 +212,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
     const int max_lag = std::min(n - 1, sample_rate / kMinFreqHz);
     if (min_lag >= max_lag) {
         dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
+        sanitize_output(&out);
         return out;
     }
 
@@ -192,8 +228,9 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
         centered[i] = static_cast<double>(mono_samples[i]) - mean;
         energy += centered[i] * centered[i];
     }
-    if (energy < 1e-8) {
+    if (energy < kUnvoicedEnergyFloor) {
         dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
+        sanitize_output(&out);
         return out;
     }
 
@@ -239,6 +276,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
     }
     if (best_lag <= 0) {
         dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
+        sanitize_output(&out);
         return out;
     }
 
@@ -258,6 +296,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
     const double freq = choose_tracked_frequency(dsp, raw_freq);
     if (!is_finite_positive(freq)) {
         dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
+        sanitize_output(&out);
         return out;
     }
 
@@ -292,7 +331,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
             stability_confidence = std::clamp(1.0 - (rms_cents / 45.0), 0.0, 1.0);
         }
     }
-    const double confidence = periodicity_confidence * 0.7 + stability_confidence * 0.3;
+    const double confidence = sanitize_confidence(periodicity_confidence * 0.7 + stability_confidence * 0.3);
 
     out.freq_hz = freq;
     out.midi_float = midi_float;
@@ -331,5 +370,6 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
     }
 
     dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
+    sanitize_output(&out);
     return out;
 }
