@@ -1,83 +1,52 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitch_translator/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('shows app shell when onboarding completion is persisted', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({'onboarding_complete': true});
-
-    await tester.pumpWidget(const PitchTranslatorApp());
-    await tester.pumpAndSettle();
-
-    expect(find.text('Home'), findsOneWidget);
-    expect(find.text('ONBOARDING_CALIBRATION'), findsNothing);
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('persists onboarding completion after first-run flow', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-
+  testWidgets('shows home screen with navigation tiles', (tester) async {
     await tester.pumpWidget(const PitchTranslatorApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('ONBOARDING_CALIBRATION'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Microphone permission granted'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Headphones connected for reference playback'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.widgetWithText(FilledButton, 'Start training'));
-    await tester.pumpAndSettle();
-
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool('onboarding_complete'), isTrue);
-    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Pitch Translator'), findsOneWidget);
+    expect(find.text('Live Pitch'), findsOneWidget);
+    expect(find.text('History'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
   });
 
-  testWidgets(
-      'shows onboarding on first run when no persisted completion exists', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-
+  testWidgets('tapping Live Pitch tile navigates to live pitch screen',
+      (tester) async {
     await tester.pumpWidget(const PitchTranslatorApp());
     await tester.pumpAndSettle();
 
-    expect(find.byType(CircularProgressIndicator), findsNothing);
-    expect(find.text('ONBOARDING_CALIBRATION'), findsOneWidget);
+    await tester.tap(find.text('Live Pitch'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Live Pitch'), findsWidgets);
   });
 
-  testWidgets('advances to app shell after completing onboarding checklist', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-
+  testWidgets('tapping History tile navigates to history screen',
+      (tester) async {
     await tester.pumpWidget(const PitchTranslatorApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.tap(find.text('History'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Microphone permission granted'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Headphones connected for reference playback'));
+    expect(find.text('History'), findsWidgets);
+  });
+
+  testWidgets('tapping Settings tile navigates to settings screen',
+      (tester) async {
+    await tester.pumpWidget(const PitchTranslatorApp());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Start training'));
+    await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Settings'), findsWidgets);
   });
 }

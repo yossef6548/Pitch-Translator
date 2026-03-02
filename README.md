@@ -79,6 +79,29 @@ Why this matters:
 - Library loading now degrades safely to empty-state metrics if storage/database plumbing is unavailable (test or bootstrap edge environments), preserving screen availability.
 - Full Flutter test suite and required QA-targeted suites were re-run successfully after these fixes.
 
+## 5) Flutter architecture refactor (main.dart + feature wiring)
+
+- `apps/mobile_flutter/lib/main.dart` is now minimal bootstrap only:
+  - `WidgetsFlutterBinding.ensureInitialized()`
+  - `runApp(const App())`
+- New app composition layer added:
+  - `apps/mobile_flutter/lib/app/app.dart` for `MaterialApp` theme + route wiring
+  - `apps/mobile_flutter/lib/app/router.dart` for named-route registration
+- New feature folders added to isolate presentation and orchestration concerns:
+  - `features/live_pitch/` (screen/controller/view-model/widgets)
+  - `features/history/` (sessions list and details UI)
+  - `features/settings/` (settings UI + persisted preferences)
+- New core utilities added in `core/`:
+  - `logger.dart` (app-level logging helper)
+  - `errors.dart` (typed app errors)
+  - `time.dart` (duration/format helpers)
+- `LivePitchController` now owns:
+  - `NativeAudioBridge`
+  - `TrainingEngine`
+  - `SessionRepository`
+  and exposes `init()`, `startSession()`, `pause()`, `resume()`, `stopSession()`, and `dispose()`.
+- `LivePitchController` subscribes to `NativeAudioBridge.frames()`, forwards frames to `TrainingEngine.onDspFrame()`, aggregates session metrics (average error, stability score, drift count, duration), and persists sessions + drift events on stop.
+
 ---
 
 # Repository structure

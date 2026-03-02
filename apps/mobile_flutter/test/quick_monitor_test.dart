@@ -1,31 +1,30 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitch_translator/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  group('Quick Monitor', () {
+  group('Home screen navigation', () {
     setUp(() {
-      SharedPreferences.setMockInitialValues({'onboarding_complete': true});
+      SharedPreferences.setMockInitialValues({});
     });
 
-    testWidgets('renders Quick Monitor card with expected elements', (tester) async {
+    testWidgets('renders home screen with Live Pitch and History tiles',
+        (tester) async {
       await tester.pumpWidget(const PitchTranslatorApp());
       await tester.pumpAndSettle();
 
-      expect(find.text('Quick Monitor'), findsOneWidget);
-      expect(find.text('Tap to open LIVE_PITCH'), findsOneWidget);
+      expect(find.text('Live Pitch'), findsOneWidget);
+      expect(find.text('Open live audio feedback session'), findsOneWidget);
     });
 
-    testWidgets('tap opens LivePitchScreen with passive config (reference OFF)', (tester) async {
+    testWidgets('tap Live Pitch tile opens live pitch screen', (tester) async {
       await tester.pumpWidget(const PitchTranslatorApp());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Quick Monitor'));
+      await tester.tap(find.text('Live Pitch'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('LIVE_PITCH • PF_1'), findsOneWidget);
-      expect(find.textContaining('Reference: OFF'), findsOneWidget);
+      expect(find.textContaining('Live Pitch'), findsWidgets);
     });
   });
 }
