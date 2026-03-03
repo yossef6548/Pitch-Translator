@@ -24,3 +24,7 @@ add_executable(pt_dsp_recorded_validation
     tests/recorded_validation.cpp
 )
 target_link_libraries(pt_dsp_recorded_validation PRIVATE pt_dsp)
+target_compile_definitions(pt_dsp_recorded_validation PRIVATE
+    PT_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/samples/fixtures.txt"
+    PT_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/samples/generated"
+)
