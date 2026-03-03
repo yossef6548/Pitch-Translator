@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(pt_dsp STATIC
     src/dsp_core.cpp
-    src/pitch_detector_stub.cpp
 )
 
 target_include_directories(pt_dsp PUBLIC include)
@@ -20,3 +19,12 @@ add_executable(pt_dsp_voice_validation
     tests/voice_validation.cpp
 )
 target_link_libraries(pt_dsp_voice_validation PRIVATE pt_dsp)
+
+add_executable(pt_dsp_recorded_validation
+    tests/recorded_validation.cpp
+)
+target_link_libraries(pt_dsp_recorded_validation PRIVATE pt_dsp)
+target_compile_definitions(pt_dsp_recorded_validation PRIVATE
+    PT_FIXTURE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/samples/fixtures.txt"
+    PT_GENERATED_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/samples/generated"
+)

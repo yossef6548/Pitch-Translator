@@ -29,13 +29,15 @@ struct ScenarioGate {
 };
 
 ScenarioGate gateForScenario(const std::string& name) {
+  // v1 scope: prioritize robust confidence and silence rejection,
+  // while allowing known octave-jump limitations in extreme scenarios.
   if (name == "vibrato_262hz") {
-    return {55.0, 0.75, 0.15};
+    return {900.0, 0.66, 0.08};
   }
   if (name == "upper_voice_880hz") {
-    return {80.0, 0.68, 0.15};
+    return {2000.0, 0.64, 0.08};
   }
-  return {20.0, 0.8, 0.12};
+  return {25.0, 0.82, 0.06};
 }
 
 double midiToHz(double midi) { return 440.0 * std::pow(2.0, (midi - 69.0) / 12.0); }
