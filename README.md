@@ -111,7 +111,7 @@ Why this matters:
   - unsupported device/plugin path
   - audio interrupted
 - Added denied-permanently recovery UX with OS settings instructions and an in-app deep-link action to open app settings.
-- Session controls now enforce a tighter start/pause/resume/stop flow based on controller stage state.
+- Session controls now enforce a tighter start/pause/resume/stop flow based on controller stage state. Start is only enabled in `prePermission`, `ready`, and `completed` stages (not while paused or running), preventing a paused session from being discarded by an accidental new start.
 - Stop flow now prioritizes safe session persistence even when native stop throws (for example after interruption/focus churn), then reports stop errors after persistence succeeds.
 
 ---
