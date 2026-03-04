@@ -10,6 +10,19 @@ This monorepo includes:
 - Native iOS/Android bridge implementation stubs with DSP wiring
 - QA replay assets and deterministic test strategy
 
+
+## Release-readiness snapshot (current repo state)
+
+- **App version**: `apps/mobile_flutter/pubspec.yaml` is now set to `1.0.0+1` (non-zero release version).
+- **Changelog**: repository-level `CHANGELOG.md` is present and tracks release updates.
+- **Crash/log reporting minimum**: centralized `AppLogger` supports structured levels, in-memory retention, and local export via Settings → Diagnostic logs.
+- **Store compliance messaging in-app**: Settings now includes explicit privacy and microphone disclosures:
+  - “Local-only SQLite storage”
+  - microphone usage required for live pitch detection.
+- **Platform permission declarations**:
+  - Android manifest includes `android.permission.RECORD_AUDIO`.
+  - iOS host app still must provide `NSMicrophoneUsageDescription` in Runner `Info.plist` during host integration (documented in `native/ios/README.md`).
+
 ---
 
 # Release status (ship gate)

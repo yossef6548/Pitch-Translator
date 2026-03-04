@@ -50,6 +50,7 @@ class LivePitchController extends ChangeNotifier {
   Completer<void>? _firstFrameCompleter;
 
   Future<void> init() async {
+    AppLogger.info('Initializing live pitch controller frame subscription');
     _frameSubscription = _bridge.frames().listen(
       _onFrame,
       onError: (error) {
@@ -67,6 +68,7 @@ class LivePitchController extends ChangeNotifier {
     }
     final permission = await Permission.microphone.request();
     if (!permission.isGranted) {
+      AppLogger.warning('Microphone permission denied before session start');
       final isPermanent = permission.isPermanentlyDenied ||
           permission.isRestricted ||
           permission.isLimited;
@@ -85,6 +87,7 @@ class LivePitchController extends ChangeNotifier {
     _resetMetrics();
     _firstFrameCompleter = Completer<void>();
     try {
+      AppLogger.info('Starting native audio bridge');
       await _bridge.start();
       await _firstFrameCompleter!.future.timeout(
         _bridge.firstFrameTimeout,
@@ -93,6 +96,7 @@ class LivePitchController extends ChangeNotifier {
           throw AudioBridgeException(AudioBridgeFailure.noFramesTimeout);
         },
       );
+      AppLogger.info('First frame received; transitioning to running session');
       _engine.onIntent(TrainingIntent.start);
       _viewModel = const LivePitchViewModel.initial().copyWith(
         running: true,
@@ -103,6 +107,7 @@ class LivePitchController extends ChangeNotifier {
       );
       notifyListeners();
     } on AudioBridgeException catch (error) {
+      AppLogger.error('Failed to start session', error);
       _viewModel = _viewModel.copyWith(
         running: false,
         sessionStage: LivePitchSessionStage.ready,
@@ -139,6 +144,7 @@ class LivePitchController extends ChangeNotifier {
   }
 
   Future<void> stopSession() async {
+    AppLogger.info('Stopping live pitch session');
     AudioBridgeException? stopError;
     try {
       await _bridge.stop();
@@ -197,6 +203,7 @@ class LivePitchController extends ChangeNotifier {
       );
       _startedAtMs = null;
     } catch (error) {
+      AppLogger.error('Session persistence failure', error);
       throw SessionPersistenceError('Failed to persist session: $error');
     }
 

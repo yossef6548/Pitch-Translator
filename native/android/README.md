@@ -38,8 +38,8 @@ Frames emitted to Flutter use the strict map shape expected by `DspFrame.fromJso
 
 1. Add this module as a plugin/library dependency from the Flutter Android host app.
 2. Ensure `externalNativeBuild.cmake.path` points to `native/android/src/main/cpp/CMakeLists.txt`.
-3. Confirm `AndroidManifest.xml` merge contains `RECORD_AUDIO`.
-4. Verify permission prompt + denial handling in app UX.
+3. Confirm `AndroidManifest.xml` merge contains `RECORD_AUDIO` (`android.permission.RECORD_AUDIO` is declared in this module manifest).
+4. Verify permission prompt + denial handling in app UX, and ensure the in-app disclosure states microphone use is required for live pitch detection.
 5. Validate phone-call interruption, Bluetooth connect/disconnect, wired headset plug/unplug, and background/foreground transitions on physical devices.
 
 ## Remaining release blockers (device-only)
