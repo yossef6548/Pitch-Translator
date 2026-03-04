@@ -21,9 +21,9 @@ class LivePitchController extends ChangeNotifier {
     NativeAudioBridge? bridge,
     TrainingEngine? engine,
     SessionRepository? sessionRepository,
-  }) : _bridge = bridge ?? NativeAudioBridge(),
-       _engine = engine ?? TrainingEngine(config: config),
-       _sessionRepository = sessionRepository ?? SessionRepository.instance;
+  })  : _bridge = bridge ?? NativeAudioBridge(),
+        _engine = engine ?? TrainingEngine(config: config),
+        _sessionRepository = sessionRepository ?? SessionRepository.instance;
 
   final ExerciseDefinition exercise;
   final LevelId level;
@@ -38,6 +38,7 @@ class LivePitchController extends ChangeNotifier {
 
   StreamSubscription<DspFrame>? _frameSubscription;
   int? _startedAtMs;
+  int? _startedAtFrameTimestampMs;
   int? _lastFrameAtMs;
   int _activeDurationMs = 0;
   int _lockedDurationMs = 0;
@@ -64,8 +65,7 @@ class LivePitchController extends ChangeNotifier {
     }
     final permission = await Permission.microphone.request();
     if (!permission.isGranted) {
-      final isPermanent =
-          permission.isPermanentlyDenied ||
+      final isPermanent = permission.isPermanentlyDenied ||
           permission.isRestricted ||
           permission.isLimited;
       _viewModel = _viewModel.copyWith(
@@ -144,8 +144,8 @@ class LivePitchController extends ChangeNotifier {
       stopError = error;
     }
     _engine.onIntent(TrainingIntent.stop);
-    final endedAtMs = DateTime.now().millisecondsSinceEpoch;
     final startedAtMs = _startedAtMs;
+    final endedAtMs = _resolveEndedAtMs(startedAtMs);
     _viewModel = _viewModel.copyWith(
       running: false,
       uiState: _engine.state,
@@ -250,6 +250,7 @@ class LivePitchController extends ChangeNotifier {
     _engine.onDspFrame(frame);
 
     if (_viewModel.running) {
+      _startedAtFrameTimestampMs ??= frame.timestampMs;
       if (_lastFrameAtMs != null) {
         final delta = math.max(0, frame.timestampMs - _lastFrameAtMs!);
         _activeDurationMs += delta;
@@ -271,7 +272,9 @@ class LivePitchController extends ChangeNotifier {
         _driftEvents.add(
           DriftEventWrite(
             eventIndex: _driftEvents.length,
-            confirmedAtMs: DateTime.now().millisecondsSinceEpoch,
+            confirmedAtMs: _resolveFrameTimestampToEpoch(
+              drift.after.timestampMs,
+            ),
             beforeMidi: drift.before.nearestMidi,
             beforeCents: drift.before.centsError,
             beforeFreqHz: drift.before.freqHz,
@@ -297,6 +300,32 @@ class LivePitchController extends ChangeNotifier {
       duration: Duration(milliseconds: _activeDurationMs),
     );
     notifyListeners();
+  }
+
+  int _resolveEndedAtMs(int? startedAtMs) {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (startedAtMs == null) return nowMs;
+
+    final startedFrameMs = _startedAtFrameTimestampMs;
+    final lastFrameMs = _lastFrameAtMs;
+    if (startedFrameMs == null || lastFrameMs == null) {
+      return nowMs;
+    }
+
+    final elapsedFromFrames = math.max(0, lastFrameMs - startedFrameMs);
+    final frameAlignedEndedAtMs = startedAtMs + elapsedFromFrames;
+    return frameAlignedEndedAtMs > nowMs ? nowMs : frameAlignedEndedAtMs;
+  }
+
+  int _resolveFrameTimestampToEpoch(int frameTimestampMs) {
+    final startedAtMs = _startedAtMs;
+    final startedFrameMs = _startedAtFrameTimestampMs;
+    if (startedAtMs == null || startedFrameMs == null) {
+      return DateTime.now().millisecondsSinceEpoch;
+    }
+
+    final elapsedFromFrames = math.max(0, frameTimestampMs - startedFrameMs);
+    return startedAtMs + elapsedFromFrames;
   }
 
   String _toActionableMessage(AudioBridgeFailure failure) {
@@ -330,6 +359,7 @@ class LivePitchController extends ChangeNotifier {
 
   void _resetMetrics() {
     _startedAtMs = DateTime.now().millisecondsSinceEpoch;
+    _startedAtFrameTimestampMs = null;
     _lastFrameAtMs = null;
     _activeDurationMs = 0;
     _lockedDurationMs = 0;

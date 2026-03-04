@@ -49,6 +49,14 @@ Current conclusion after this pass:
 
 # What was completed in this pass
 
+## Data + analytics correctness/performance updates
+
+- Live session persistence now anchors `ended_at_ms` and drift `confirmed_at_ms` to the same session timeline derived from DSP frame timestamps, reducing wall-clock skew and improving session/drift correlation fidelity in analytics.
+- Drift event writes continue to persist full before/after detail payloads (`midi`, `cents`, `freq_hz`) and now store frame-aligned confirmation timestamps at stop-time persistence.
+- `SessionRepository.modeLevelPercentiles()` was optimized to avoid the per-group p50 + p90 double-query pattern by fetching each group's sorted absolute errors once and calculating percentile indices in Dart.
+- Added migration coverage tests that create legacy schemas at v1, v2, v3, and v4, then migrate to v5 and verify the expected drift-event columns and v5 lookup indexes are present.
+
+
 ## 1) Audio bridge hardening + deterministic plugin-absence behavior
 
 - `NativeAudioBridge.frames()` now performs a native-start probe before frame subscription.
