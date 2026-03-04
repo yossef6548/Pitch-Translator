@@ -30,7 +30,8 @@ Frames emitted to Flutter use the strict map shape expected by `DspFrame.fromJso
 1. Integrate this plugin into the Flutter iOS host target (CocoaPods via provided podspec or equivalent SPM packaging).
 2. Ensure DSP headers/sources from `dsp/include` and `dsp/src` are linked into the target.
 3. Add microphone usage description key(s) in the runner `Info.plist`:
-   - `NSMicrophoneUsageDescription`
+   - `NSMicrophoneUsageDescription` = `Pitch Translator uses the microphone for real-time pitch detection during live practice sessions.`
+   - Note: this repository does not include the host Runner `Info.plist`; the value must be set in the consuming app target.
 4. Validate permission prompt/denial UX and all lifecycle transitions on physical devices.
 
 ## Remaining release blockers (device-only)
