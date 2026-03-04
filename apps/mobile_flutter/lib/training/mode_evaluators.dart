@@ -95,7 +95,7 @@ class GroupSimulationEvaluator {
     for (final frame in frames) {
       final dt = previousTimestamp == null
           ? 0
-          : (frame.timestampMs - previousTimestamp!).clamp(0, 1000);
+          : (frame.timestampMs - previousTimestamp).clamp(0, 1000);
       previousTimestamp = frame.timestampMs;
       activeMs += dt;
 
