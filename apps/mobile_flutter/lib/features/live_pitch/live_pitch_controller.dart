@@ -21,9 +21,9 @@ class LivePitchController extends ChangeNotifier {
     NativeAudioBridge? bridge,
     TrainingEngine? engine,
     SessionRepository? sessionRepository,
-  }) : _bridge = bridge ?? NativeAudioBridge(),
-       _engine = engine ?? TrainingEngine(config: config),
-       _sessionRepository = sessionRepository ?? SessionRepository.instance;
+  })  : _bridge = bridge ?? NativeAudioBridge(),
+        _engine = engine ?? TrainingEngine(config: config),
+        _sessionRepository = sessionRepository ?? SessionRepository.instance;
 
   final ExerciseDefinition exercise;
   final LevelId level;
@@ -38,7 +38,10 @@ class LivePitchController extends ChangeNotifier {
 
   StreamSubscription<DspFrame>? _frameSubscription;
   int? _startedAtMs;
+  int? _startedAtFrameTimestampMs;
   int? _lastFrameAtMs;
+  int? _segmentFrameBaseMs;
+  int? _segmentEpochBaseMs;
   int _activeDurationMs = 0;
   int _lockedDurationMs = 0;
   final List<double> _absErrors = <double>[];
@@ -64,8 +67,7 @@ class LivePitchController extends ChangeNotifier {
     }
     final permission = await Permission.microphone.request();
     if (!permission.isGranted) {
-      final isPermanent =
-          permission.isPermanentlyDenied ||
+      final isPermanent = permission.isPermanentlyDenied ||
           permission.isRestricted ||
           permission.isLimited;
       _viewModel = _viewModel.copyWith(
@@ -144,8 +146,8 @@ class LivePitchController extends ChangeNotifier {
       stopError = error;
     }
     _engine.onIntent(TrainingIntent.stop);
-    final endedAtMs = DateTime.now().millisecondsSinceEpoch;
     final startedAtMs = _startedAtMs;
+    final endedAtMs = _resolveEndedAtMs(startedAtMs);
     _viewModel = _viewModel.copyWith(
       running: false,
       uiState: _engine.state,
@@ -250,7 +252,11 @@ class LivePitchController extends ChangeNotifier {
     _engine.onDspFrame(frame);
 
     if (_viewModel.running) {
+      final isFirstFrame = _startedAtFrameTimestampMs == null;
+      _startedAtFrameTimestampMs ??= frame.timestampMs;
+      var isDspTimestampReset = false;
       if (_lastFrameAtMs != null) {
+        isDspTimestampReset = frame.timestampMs < _lastFrameAtMs!;
         final delta = math.max(0, frame.timestampMs - _lastFrameAtMs!);
         _activeDurationMs += delta;
         if (_engine.state.id == LivePitchStateId.locked) {
@@ -258,6 +264,10 @@ class LivePitchController extends ChangeNotifier {
         }
       }
       _lastFrameAtMs = frame.timestampMs;
+      if (isFirstFrame || isDspTimestampReset) {
+        _segmentFrameBaseMs = frame.timestampMs;
+        _segmentEpochBaseMs = _startedAtMs! + _activeDurationMs;
+      }
 
       final effectiveError = _engine.state.effectiveError;
       if (effectiveError != null) {
@@ -271,7 +281,9 @@ class LivePitchController extends ChangeNotifier {
         _driftEvents.add(
           DriftEventWrite(
             eventIndex: _driftEvents.length,
-            confirmedAtMs: DateTime.now().millisecondsSinceEpoch,
+            confirmedAtMs: _resolveFrameTimestampToEpoch(
+              drift.after.timestampMs,
+            ),
             beforeMidi: drift.before.nearestMidi,
             beforeCents: drift.before.centsError,
             beforeFreqHz: drift.before.freqHz,
@@ -297,6 +309,21 @@ class LivePitchController extends ChangeNotifier {
       duration: Duration(milliseconds: _activeDurationMs),
     );
     notifyListeners();
+  }
+
+  int _resolveEndedAtMs(int? startedAtMs) {
+    if (startedAtMs == null) return DateTime.now().millisecondsSinceEpoch;
+    return startedAtMs + _activeDurationMs;
+  }
+
+  int _resolveFrameTimestampToEpoch(int frameTimestampMs) {
+    final epochBase = _segmentEpochBaseMs;
+    final frameBase = _segmentFrameBaseMs;
+    if (epochBase == null || frameBase == null) {
+      return DateTime.now().millisecondsSinceEpoch;
+    }
+    final elapsedMs = math.max(0, frameTimestampMs - frameBase);
+    return epochBase + elapsedMs;
   }
 
   String _toActionableMessage(AudioBridgeFailure failure) {
@@ -330,7 +357,10 @@ class LivePitchController extends ChangeNotifier {
 
   void _resetMetrics() {
     _startedAtMs = DateTime.now().millisecondsSinceEpoch;
+    _startedAtFrameTimestampMs = null;
     _lastFrameAtMs = null;
+    _segmentFrameBaseMs = null;
+    _segmentEpochBaseMs = null;
     _activeDurationMs = 0;
     _lockedDurationMs = 0;
     _absErrors.clear();

@@ -179,11 +179,25 @@ class DriftEventWrite {
 }
 
 class SessionRepository {
-  SessionRepository._();
+  SessionRepository._({
+    Future<String> Function()? databasesPathProvider,
+    DatabaseFactory? databaseFactory,
+  })  : _databasesPathProvider = databasesPathProvider,
+        databasePathOverride = null,
+        _databaseFactory = databaseFactory;
+
+  SessionRepository.forTesting({
+    required this.databasePathOverride,
+    DatabaseFactory? databaseFactory,
+  })  : _databasesPathProvider = null,
+        _databaseFactory = databaseFactory;
 
   static final SessionRepository instance = SessionRepository._();
 
   Database? _db;
+  final Future<String> Function()? _databasesPathProvider;
+  final String? databasePathOverride;
+  final DatabaseFactory? _databaseFactory;
 
   Future<void> close() async {
     final db = _db;
@@ -196,27 +210,33 @@ class SessionRepository {
   Future<Database> _database() async {
     if (_db != null) return _db!;
 
-    final databasesPath = await getDatabasesPath();
-    final dbPath = p.join(databasesPath, 'pitch_translator.db');
+    final dbPath = databasePathOverride ??
+        p.join(
+          await (_databasesPathProvider?.call() ?? getDatabasesPath()),
+          'pitch_translator.db',
+        );
+    final factory = _databaseFactory ?? databaseFactory;
 
-    _db = await openDatabase(
+    _db = await factory.openDatabase(
       dbPath,
-      version: 5,
-      onCreate: (db, version) async => _createSchema(db),
-      onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          await _createV2Tables(db);
-        }
-        if (oldVersion < 3) {
-          await _migrateToV3(db);
-        }
-        if (oldVersion < 4) {
-          await _migrateToV4(db);
-        }
-        if (oldVersion < 5) {
-          await _migrateToV5(db);
-        }
-      },
+      options: OpenDatabaseOptions(
+        version: 5,
+        onCreate: (db, version) async => _createSchema(db),
+        onUpgrade: (db, oldVersion, newVersion) async {
+          if (oldVersion < 2) {
+            await _createV2Tables(db);
+          }
+          if (oldVersion < 3) {
+            await _migrateToV3(db);
+          }
+          if (oldVersion < 4) {
+            await _migrateToV4(db);
+          }
+          if (oldVersion < 5) {
+            await _migrateToV5(db);
+          }
+        },
+      ),
     );
 
     return _db!;
@@ -505,11 +525,10 @@ class SessionRepository {
       'detection_profile': avgError <= 20
           ? 'Strict'
           : avgError <= 35
-          ? 'Standard'
-          : 'Relaxed',
-      'assist_ratio': total == 0
-          ? '0%'
-          : '${((assisted / total) * 100).round()}%',
+              ? 'Standard'
+              : 'Relaxed',
+      'assist_ratio':
+          total == 0 ? '0%' : '${((assisted / total) * 100).round()}%',
       'retention_30d': retention.masteredCount == 0
           ? '0%'
           : '${(retention.retained30DayRatio * 100).round()}%',
@@ -546,8 +565,7 @@ class SessionRepository {
       final p50Index = percentileIndex(0.50);
       final p90Index = percentileIndex(0.90);
 
-      // Fetch the p50 value for this group from SQLite using ORDER BY + OFFSET.
-      final p50Rows = await db.rawQuery(
+      final sortedRows = await db.rawQuery(
         '''
         SELECT ABS(avg_error_cents) AS abs_error
         FROM attempts
@@ -555,31 +573,19 @@ class SessionRepository {
           AND exercise_id = ?
           AND level_id = ?
         ORDER BY abs_error
-        LIMIT 1 OFFSET ?
+        LIMIT ?
         ''',
-        [exerciseId, levelId, p50Index],
+        [exerciseId, levelId, p90Index + 1],
       );
 
-      // Fetch the p90 value for this group from SQLite using ORDER BY + OFFSET.
-      final p90Rows = await db.rawQuery(
-        '''
-        SELECT ABS(avg_error_cents) AS abs_error
-        FROM attempts
-        WHERE avg_error_cents IS NOT NULL
-          AND exercise_id = ?
-          AND level_id = ?
-        ORDER BY abs_error
-        LIMIT 1 OFFSET ?
-        ''',
-        [exerciseId, levelId, p90Index],
-      );
-
-      if (p50Rows.isEmpty || p90Rows.isEmpty) {
+      if (sortedRows.isEmpty) {
         continue;
       }
 
-      final p50ErrorCents = (p50Rows.first['abs_error'] as num).toDouble();
-      final p90ErrorCents = (p90Rows.first['abs_error'] as num).toDouble();
+      final p50ErrorCents =
+          (sortedRows[p50Index]['abs_error'] as num).toDouble();
+      final p90ErrorCents =
+          (sortedRows[p90Index]['abs_error'] as num).toDouble();
       final mode = _modeFromExerciseId(exerciseId);
 
       output.add(
