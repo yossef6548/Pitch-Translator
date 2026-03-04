@@ -50,13 +50,7 @@ class LivePitchController extends ChangeNotifier {
   Completer<void>? _firstFrameCompleter;
 
   Future<void> init() async {
-    AppLogger.info('Initializing live pitch controller frame subscription');
-    _frameSubscription = _bridge.frames().listen(
-      _onFrame,
-      onError: (error) {
-        AppLogger.error('Audio frame stream failed', error);
-      },
-    );
+    AppLogger.info('Live pitch controller initialized (audio idle until Start)');
   }
 
   Future<void> startSession() async {
@@ -89,9 +83,11 @@ class LivePitchController extends ChangeNotifier {
     try {
       AppLogger.info('Starting native audio bridge');
       await _bridge.start();
+      _subscribeToFrames();
       await _firstFrameCompleter!.future.timeout(
         _bridge.firstFrameTimeout,
         onTimeout: () async {
+          await _cancelFrameSubscription();
           await _bridge.stop();
           throw AudioBridgeException(AudioBridgeFailure.noFramesTimeout);
         },
@@ -107,6 +103,7 @@ class LivePitchController extends ChangeNotifier {
       );
       notifyListeners();
     } on AudioBridgeException catch (error) {
+      await _cancelFrameSubscription();
       AppLogger.error('Failed to start session', error);
       _viewModel = _viewModel.copyWith(
         running: false,
@@ -120,7 +117,11 @@ class LivePitchController extends ChangeNotifier {
   }
 
   Future<void> pause() async {
-    await _bridge.stop();
+    try {
+      await _bridge.stop();
+    } finally {
+      await _cancelFrameSubscription();
+    }
     _engine.onIntent(TrainingIntent.pause);
     _viewModel = _viewModel.copyWith(
       running: false,
@@ -131,7 +132,9 @@ class LivePitchController extends ChangeNotifier {
   }
 
   Future<void> resume() async {
+    _firstFrameCompleter = Completer<void>();
     await _bridge.start();
+    _subscribeToFrames();
     _engine.onIntent(TrainingIntent.resume);
     _viewModel = _viewModel.copyWith(
       running: true,
@@ -150,6 +153,8 @@ class LivePitchController extends ChangeNotifier {
       await _bridge.stop();
     } on AudioBridgeException catch (error) {
       stopError = error;
+    } finally {
+      await _cancelFrameSubscription();
     }
     _engine.onIntent(TrainingIntent.stop);
     final startedAtMs = _startedAtMs;
@@ -246,10 +251,24 @@ class LivePitchController extends ChangeNotifier {
 
   @override
   void dispose() {
-    unawaited(_frameSubscription?.cancel());
+    unawaited(_cancelFrameSubscription());
     unawaited(_bridge.stop());
     unawaited(_bridge.dispose());
     super.dispose();
+  }
+
+  void _subscribeToFrames() {
+    _frameSubscription ??= _bridge.frames().listen(
+      _onFrame,
+      onError: (error) {
+        AppLogger.error('Audio frame stream failed', error);
+      },
+    );
+  }
+
+  Future<void> _cancelFrameSubscription() async {
+    await _frameSubscription?.cancel();
+    _frameSubscription = null;
   }
 
   void _onFrame(DspFrame frame) {
@@ -342,7 +361,7 @@ class LivePitchController extends ChangeNotifier {
       case AudioBridgeFailure.audioFocusDenied:
         return 'Another app has exclusive audio focus. Pause other media/recorders and retry.';
       case AudioBridgeFailure.pluginUnavailable:
-        return 'Native audio engine is unavailable on this build. Restart the app or reinstall the latest version.';
+        return 'This build does not support real-time pitch tracking. Please reinstall/update.';
       case AudioBridgeFailure.unknown:
         return 'Unexpected audio error. Restart the app and try again.';
     }

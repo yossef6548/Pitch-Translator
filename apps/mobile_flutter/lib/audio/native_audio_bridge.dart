@@ -45,32 +45,31 @@ class NativeAudioBridge {
   final int? targetFrameFps;
 
   Stream<DspFrame>? _cachedStream;
-  StreamController<DspFrame>? _frameController;
-  StreamSubscription<DspFrame>? _cachedSubscription;
-  static bool _isRunning = false;
+  bool _isRunning = false;
+  bool _startedSuccessfully = false;
+  bool _usingSimulation = false;
 
-  static bool get isRunning => _isRunning;
+  bool get isRunning => _isRunning;
 
   Stream<DspFrame> frames() {
-    if (_cachedStream == null) {
-      _frameController = StreamController<DspFrame>.broadcast();
-      _cachedSubscription = _createFrameStream().listen(
-        _frameController!.add,
-        onError: _frameController!.addError,
-        onDone: _frameController!.close,
-      );
-      _cachedStream = _frameController!.stream;
+    if (!_startedSuccessfully) {
+      // Intentional hard guard: consumers must call start() and await success
+      // before listening to frames.
+      throw StateError('NativeAudioBridge not started');
     }
+    _cachedStream ??= (_usingSimulation
+            ? _simulatedFrames()
+            : _frameChannel.receiveBroadcastStream(null).map(
+                  (dynamic event) => _frameFromEvent(event),
+                ))
+        .asBroadcastStream();
     return _cachedStream!;
   }
 
   Future<void> dispose() async {
-    await _cachedSubscription?.cancel();
-    _cachedSubscription = null;
-    if (_frameController != null && !_frameController!.isClosed) {
-      await _frameController!.close();
-    }
-    _frameController = null;
+    _isRunning = false;
+    _startedSuccessfully = false;
+    _usingSimulation = false;
     _cachedStream = null;
   }
 
@@ -80,7 +79,6 @@ class NativeAudioBridge {
         'allow_mixing': allowMixing,
         if (targetFrameFps != null) 'target_frame_fps': targetFrameFps,
       });
-      _isRunning = true;
       return true;
     } on MissingPluginException {
       if (!enableSimulationFallback) {
@@ -95,14 +93,27 @@ class NativeAudioBridge {
   Future<void> start() async {
     try {
       final started = await _tryStartNative();
+      _usingSimulation = !started;
+      _startedSuccessfully = started || enableSimulationFallback;
+      _isRunning = true;
+      _cachedStream = null;
       if (!started && !enableSimulationFallback) {
         throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
       }
     } on MissingPluginException {
+      _usingSimulation = false;
+      _startedSuccessfully = false;
+      _isRunning = false;
       throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
     } on AudioBridgeException {
+      _usingSimulation = false;
+      _startedSuccessfully = false;
+      _isRunning = false;
       rethrow;
     } catch (error) {
+      _usingSimulation = false;
+      _startedSuccessfully = false;
+      _isRunning = false;
       throw AudioBridgeException(AudioBridgeFailure.unknown, details: '$error');
     }
   }
@@ -120,6 +131,9 @@ class NativeAudioBridge {
       throw AudioBridgeException(AudioBridgeFailure.unknown, details: '$error');
     } finally {
       _isRunning = false;
+      _startedSuccessfully = false;
+      _usingSimulation = false;
+      _cachedStream = null;
     }
   }
 
@@ -147,39 +161,6 @@ class NativeAudioBridge {
       AudioBridgeFailure.unknown,
       details: '${error.code}: ${error.message}',
     );
-  }
-
-  Stream<DspFrame> _createFrameStream() async* {
-    if (enableSimulationFallback) {
-      try {
-        final started = await _tryStartNative();
-        if (started) {
-          yield* _nativeFrameStream();
-        } else {
-          yield* _simulatedFrames();
-        }
-      } on MissingPluginException {
-        yield* _simulatedFrames();
-      }
-      return;
-    }
-
-    final started;
-    try {
-      started = await _tryStartNative();
-    } on MissingPluginException {
-      throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
-    }
-    if (!started) {
-      throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
-    }
-    yield* _nativeFrameStream();
-  }
-
-  Stream<DspFrame> _nativeFrameStream() {
-    return _frameChannel
-        .receiveBroadcastStream(null)
-        .map((dynamic event) => _frameFromEvent(event));
   }
 
   DspFrame _frameFromEvent(dynamic event) {

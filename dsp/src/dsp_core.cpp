@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <new>
 
 namespace {
@@ -69,6 +71,14 @@ struct PT_DSP {
     int history_head = 0;
     std::array<double, kHistorySize> recent_freq_hz{};
     double last_tracked_freq_hz = NAN;
+    std::array<double, kMaxProcessSamples> centered{};
+    std::array<double, kMaxProcessSamples> diff{};
+    std::array<double, kMaxProcessSamples> cmndf{};
+#ifndef NDEBUG
+    uint64_t process_calls = 0;
+    uint64_t process_total_us = 0;
+    uint64_t process_max_us = 0;
+#endif
 };
 
 namespace {
@@ -188,6 +198,9 @@ void pt_dsp_destroy(PT_DSP* dsp) {
 }
 
 DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_samples) {
+#ifndef NDEBUG
+    const auto process_start = std::chrono::steady_clock::now();
+#endif
     DSPFrameOutput out{};
     out.freq_hz = NAN;
     out.midi_float = NAN;
@@ -222,7 +235,7 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
     }
     mean /= static_cast<double>(n);
 
-    std::array<double, kMaxProcessSamples> centered{};
+    auto& centered = dsp->centered;
     double energy = 0.0;
     for (int i = 0; i < n; ++i) {
         centered[i] = static_cast<double>(mono_samples[i]) - mean;
@@ -234,8 +247,8 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
         return out;
     }
 
-    std::array<double, kMaxProcessSamples> diff{};
-    std::array<double, kMaxProcessSamples> cmndf{};
+    auto& diff = dsp->diff;
+    auto& cmndf = dsp->cmndf;
 
     for (int lag = min_lag; lag <= max_lag; ++lag) {
         double d = 0.0;
@@ -371,5 +384,19 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
 
     dsp->t_ms += (1000.0 * num_samples) / static_cast<double>(sample_rate);
     sanitize_output(&out);
+#ifndef NDEBUG
+    const auto elapsed_us = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - process_start).count());
+    dsp->process_calls += 1;
+    dsp->process_total_us += elapsed_us;
+    dsp->process_max_us = std::max(dsp->process_max_us, elapsed_us);
+    if (dsp->process_calls % 600 == 0) {
+        const double avg_us = static_cast<double>(dsp->process_total_us) / static_cast<double>(dsp->process_calls);
+        std::fprintf(stderr, "[pt_dsp] process calls=%llu avg_us=%.2f max_us=%llu\n",
+                     static_cast<unsigned long long>(dsp->process_calls),
+                     avg_us,
+                     static_cast<unsigned long long>(dsp->process_max_us));
+    }
+#endif
     return out;
 }

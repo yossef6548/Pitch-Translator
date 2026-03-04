@@ -1,28 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:pt_contracts/pt_contracts.dart';
 
 import '../exercises/exercise_catalog.dart';
 import '../features/history/history_screen.dart';
+import '../features/live_pitch/exercise_select_screen.dart';
 import '../features/live_pitch/live_pitch_screen.dart';
 import '../features/settings/settings_screen.dart';
 
 class AppRoutes {
   static const home = '/';
+  static const exerciseSelect = '/exercise-select';
   static const livePitch = '/live-pitch';
   static const history = '/history';
   static const settings = '/settings';
+}
+
+class LivePitchRouteArgs {
+  const LivePitchRouteArgs({required this.exercise, required this.level});
+
+  final ExerciseDefinition exercise;
+  final LevelId level;
 }
 
 Route<dynamic> onGenerateRoute(RouteSettings settings) {
   switch (settings.name) {
     case AppRoutes.home:
       return MaterialPageRoute(builder: (_) => const _HomeScreen());
+    case AppRoutes.exerciseSelect:
+      return MaterialPageRoute(builder: (_) => const ExerciseSelectScreen());
     case AppRoutes.livePitch:
+      final args = settings.arguments as LivePitchRouteArgs;
       return MaterialPageRoute(
         builder: (_) => LivePitchScreen(
-          exercise: ExerciseCatalog.byId('PF_1'),
-          level: LevelId.l1,
-          config: const ExerciseConfig(),
+          exercise: args.exercise,
+          level: args.level,
+          config: args.exercise.configForLevel(args.level),
         ),
       );
     case AppRoutes.history:
@@ -46,9 +57,9 @@ class _HomeScreen extends StatelessWidget {
         children: [
           ListTile(
             title: const Text('Live Pitch'),
-            subtitle: const Text('Open live audio feedback session'),
+            subtitle: const Text('Select exercise + level to start session'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).pushNamed(AppRoutes.livePitch),
+            onTap: () => Navigator.of(context).pushNamed(AppRoutes.exerciseSelect),
           ),
           ListTile(
             title: const Text('History'),

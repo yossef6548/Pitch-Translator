@@ -46,23 +46,11 @@ void main() {
       },
     );
 
-    test(
-      'frames throws when fallback disabled and native plugin is unavailable',
-      () async {
-        final bridge = NativeAudioBridge(enableSimulationFallback: false);
+    test('frames throws when called before explicit start', () async {
+      final bridge = NativeAudioBridge(enableSimulationFallback: false);
 
-        await expectLater(
-          bridge.frames().first,
-          throwsA(
-            isA<AudioBridgeException>().having(
-              (e) => e.failure,
-              'failure',
-              AudioBridgeFailure.pluginUnavailable,
-            ),
-          ),
-        );
-      },
-    );
+      expect(() => bridge.frames(), throwsA(isA<StateError>()));
+    });
 
     test('rejects payload with missing required keys', () async {
       const channel = EventChannel('pt/audio/frames/test_keys');

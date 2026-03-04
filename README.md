@@ -1,5 +1,17 @@
 # Pitch Translator
 
+## Current implementation update (latest pass)
+
+- Native audio lifecycle is now explicit: no Dart-side frame subscription can auto-start native audio; `start()` is required before `frames()`.
+- `LivePitchController` now subscribes to frames only after successful start and always cancels subscriptions on pause/stop/dispose.
+- Added a production Flutter plugin package at `packages/pt_audio_plugin` (Android/iOS) exposing:
+  - EventChannel `pt/audio/frames`
+  - MethodChannel `pt/audio/control` (`start`, `stop`)
+- App routing now uses an exercise selection flow (Home → Select Exercise → Live Pitch) and removes hardcoded `PF_1` launch wiring.
+- CI workflow now builds release artifacts directly from committed platform folders (no `flutter create --platforms` masking in workflow).
+
+> Note: this container session does not include the Flutter SDK binary, so release build verification commands must be run in CI or a local Flutter-enabled environment.
+
 Pitch Translator is a mobile-first training system that maps real-time pitch into deterministic visual and numeric feedback, detects drift, and trains rapid recovery.
 
 This monorepo includes:

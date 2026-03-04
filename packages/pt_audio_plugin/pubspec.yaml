@@ -1,0 +1,21 @@
+name: pt_audio_plugin
+description: Native realtime audio bridge plugin for Pitch Translator.
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.pitchtranslator.audio
+        pluginClass: PitchTranslatorAudioPlugin
+      ios:
+        pluginClass: PitchTranslatorAudioPlugin

@@ -439,6 +439,19 @@ class SessionRepository {
     });
   }
 
+
+  Future<Set<String>> masteredExerciseLevelKeys() async {
+    final db = await _database();
+    final rows = await db.rawQuery(
+      '''
+      SELECT exercise_id, level_id, MAX(mastered_at_ms) AS mastered_at_ms
+      FROM mastery_history
+      GROUP BY exercise_id, level_id
+      ''',
+    );
+    return rows.map((row) => '${row["exercise_id"]}:${row["level_id"]}').toSet();
+  }
+
   Future<List<SessionRecord>> recentSessions({int limit = 20}) async {
     final db = await _database();
     final rows = await db.query(
