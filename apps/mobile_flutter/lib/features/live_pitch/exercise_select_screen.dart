@@ -23,11 +23,16 @@ class _ExerciseSelectScreenState extends State<ExerciseSelectScreen> {
   }
 
   Future<void> _loadProgress() async {
-    final mastered = await _sessionRepository.masteredExerciseLevelKeys();
-    if (!mounted) return;
-    setState(() {
-      _snapshot = ProgressSnapshot(mastered: mastered);
-    });
+    try {
+      final mastered = await _sessionRepository.masteredExerciseLevelKeys();
+      if (!mounted) return;
+      setState(() {
+        _snapshot = ProgressSnapshot(mastered: mastered);
+      });
+    } catch (_) {
+      // Database not available (e.g., in tests without sqflite initialized);
+      // leave snapshot empty so the screen still renders.
+    }
   }
 
   @override

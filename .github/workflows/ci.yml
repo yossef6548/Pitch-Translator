@@ -60,6 +60,8 @@ jobs:
           channel: stable
       - name: Flutter pub get
         run: flutter pub get
+      - name: Create Android platform folder
+        run: flutter create --platforms android .
       - name: Assemble release APK
         run: flutter build apk --release
 
@@ -76,5 +78,7 @@ jobs:
           channel: stable
       - name: Flutter pub get
         run: flutter pub get
+      - name: Create iOS platform folder
+        run: flutter create --platforms ios .
       - name: Build iOS release (no signing)
         run: flutter build ios --release --no-codesign
