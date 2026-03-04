@@ -573,8 +573,9 @@ class SessionRepository {
           AND exercise_id = ?
           AND level_id = ?
         ORDER BY abs_error
+        LIMIT ?
         ''',
-        [exerciseId, levelId],
+        [exerciseId, levelId, p90Index + 1],
       );
 
       if (sortedRows.isEmpty) {

@@ -40,6 +40,8 @@ class LivePitchController extends ChangeNotifier {
   int? _startedAtMs;
   int? _startedAtFrameTimestampMs;
   int? _lastFrameAtMs;
+  int? _segmentFrameBaseMs;
+  int? _segmentEpochBaseMs;
   int _activeDurationMs = 0;
   int _lockedDurationMs = 0;
   final List<double> _absErrors = <double>[];
@@ -250,8 +252,11 @@ class LivePitchController extends ChangeNotifier {
     _engine.onDspFrame(frame);
 
     if (_viewModel.running) {
+      final isFirstFrame = _startedAtFrameTimestampMs == null;
       _startedAtFrameTimestampMs ??= frame.timestampMs;
+      var isDspTimestampReset = false;
       if (_lastFrameAtMs != null) {
+        isDspTimestampReset = frame.timestampMs < _lastFrameAtMs!;
         final delta = math.max(0, frame.timestampMs - _lastFrameAtMs!);
         _activeDurationMs += delta;
         if (_engine.state.id == LivePitchStateId.locked) {
@@ -259,6 +264,10 @@ class LivePitchController extends ChangeNotifier {
         }
       }
       _lastFrameAtMs = frame.timestampMs;
+      if (isFirstFrame || isDspTimestampReset) {
+        _segmentFrameBaseMs = frame.timestampMs;
+        _segmentEpochBaseMs = _startedAtMs! + _activeDurationMs;
+      }
 
       final effectiveError = _engine.state.effectiveError;
       if (effectiveError != null) {
@@ -303,29 +312,18 @@ class LivePitchController extends ChangeNotifier {
   }
 
   int _resolveEndedAtMs(int? startedAtMs) {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    if (startedAtMs == null) return nowMs;
-
-    final startedFrameMs = _startedAtFrameTimestampMs;
-    final lastFrameMs = _lastFrameAtMs;
-    if (startedFrameMs == null || lastFrameMs == null) {
-      return nowMs;
-    }
-
-    final elapsedFromFrames = math.max(0, lastFrameMs - startedFrameMs);
-    final frameAlignedEndedAtMs = startedAtMs + elapsedFromFrames;
-    return frameAlignedEndedAtMs > nowMs ? nowMs : frameAlignedEndedAtMs;
+    if (startedAtMs == null) return DateTime.now().millisecondsSinceEpoch;
+    return startedAtMs + _activeDurationMs;
   }
 
   int _resolveFrameTimestampToEpoch(int frameTimestampMs) {
-    final startedAtMs = _startedAtMs;
-    final startedFrameMs = _startedAtFrameTimestampMs;
-    if (startedAtMs == null || startedFrameMs == null) {
+    final epochBase = _segmentEpochBaseMs;
+    final frameBase = _segmentFrameBaseMs;
+    if (epochBase == null || frameBase == null) {
       return DateTime.now().millisecondsSinceEpoch;
     }
-
-    final elapsedFromFrames = math.max(0, frameTimestampMs - startedFrameMs);
-    return startedAtMs + elapsedFromFrames;
+    final elapsedMs = math.max(0, frameTimestampMs - frameBase);
+    return epochBase + elapsedMs;
   }
 
   String _toActionableMessage(AudioBridgeFailure failure) {
@@ -361,6 +359,8 @@ class LivePitchController extends ChangeNotifier {
     _startedAtMs = DateTime.now().millisecondsSinceEpoch;
     _startedAtFrameTimestampMs = null;
     _lastFrameAtMs = null;
+    _segmentFrameBaseMs = null;
+    _segmentEpochBaseMs = null;
     _activeDurationMs = 0;
     _lockedDurationMs = 0;
     _absErrors.clear();

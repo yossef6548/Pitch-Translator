@@ -7,10 +7,16 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   late Directory tempDir;
+  late DatabaseFactory _previousDatabaseFactory;
 
   setUpAll(() {
     sqfliteFfiInit();
+    _previousDatabaseFactory = databaseFactory;
     databaseFactory = databaseFactoryFfi;
+  });
+
+  tearDownAll(() {
+    databaseFactory = _previousDatabaseFactory;
   });
 
   setUp(() async {
