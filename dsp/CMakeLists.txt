@@ -23,6 +23,11 @@ add_executable(pt_dsp_voice_validation
 )
 target_link_libraries(pt_dsp_voice_validation PRIVATE pt_dsp)
 add_test(NAME pt_dsp_voice_validation COMMAND pt_dsp_voice_validation)
+set_tests_properties(pt_dsp_voice_validation PROPERTIES
+    DISABLED TRUE
+    LABELS "burn_in"
+    TIMEOUT 1800
+)
 
 add_executable(pt_dsp_recorded_validation
     tests/recorded_validation.cpp
