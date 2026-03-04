@@ -47,3 +47,12 @@ Frames emitted to Flutter use the strict map shape expected by `DspFrame.fromJso
 - 30+ minute continuous capture on representative hardware.
 - Mic→UI latency measurement with median ≤30ms, P95 ≤50ms.
 - Full interruption and route churn matrix sign-off.
+
+## CI integration
+
+Android quality gates are automated in `.github/workflows/ci.yml`:
+
+1. Configure/build native bridge via CMake (`native/android/src/main/cpp`).
+2. Build Flutter debug APK from `apps/mobile_flutter`.
+
+This ensures native bridge sources continue compiling and the app can assemble in CI before merge.

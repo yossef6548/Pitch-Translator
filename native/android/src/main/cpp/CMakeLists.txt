@@ -11,7 +11,6 @@ target_include_directories(pt_audio_engine PRIVATE
 
 target_sources(pt_audio_engine PRIVATE
   ../../../../../dsp/src/dsp_core.cpp
-  ../../../../../dsp/src/pitch_detector_stub.cpp
 )
 
 target_link_libraries(pt_audio_engine

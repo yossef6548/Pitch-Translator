@@ -38,3 +38,11 @@ Frames emitted to Flutter use the strict map shape expected by `DspFrame.fromJso
 - 30+ minute continuous capture on representative iOS hardware.
 - Mic→UI latency measurement with median ≤30ms, P95 ≤50ms.
 - Phone call interruption, Bluetooth route change, wired headset routing, and background/foreground matrix sign-off.
+
+## CI integration
+
+iOS quality gate is automated in `.github/workflows/ci.yml` on a macOS runner:
+
+- `flutter build ios --debug --no-codesign`
+
+This verifies the Flutter iOS target still compiles without requiring signing credentials.
