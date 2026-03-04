@@ -41,12 +41,22 @@ class _LivePitchScreenState extends State<LivePitchScreen>
     _controller.init();
   }
 
+  Future<void> _handleAudioInterruptionSafely() async {
+    try {
+      await _controller.handleAudioInterruption();
+    } catch (error, stackTrace) {
+      // Prevent unhandled async exceptions during app backgrounding.
+      debugPrint('Error handling audio interruption: $error');
+      debugPrint('$stackTrace');
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if ((state == AppLifecycleState.inactive ||
             state == AppLifecycleState.paused) &&
         _controller.viewModel.running) {
-      unawaited(_controller.handleAudioInterruption());
+      unawaited(_handleAudioInterruptionSafely());
     }
   }
 
@@ -108,15 +118,16 @@ class _LivePitchScreenState extends State<LivePitchScreen>
                   spacing: 8,
                   children: [
                     FilledButton(
-                      onPressed: vm.running
-                          ? null
-                          : () async {
+                      onPressed: !vm.running &&
+                              vm.sessionStage != LivePitchSessionStage.paused
+                          ? () async {
                               try {
                                 await _controller.startSession();
                               } catch (e, st) {
                                 debugPrint('Error starting session: $e\n$st');
                               }
-                            },
+                            }
+                          : null,
                       child: const Text('Start'),
                     ),
                     OutlinedButton(

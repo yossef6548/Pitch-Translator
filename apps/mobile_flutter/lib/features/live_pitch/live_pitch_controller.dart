@@ -56,6 +56,12 @@ class LivePitchController extends ChangeNotifier {
   }
 
   Future<void> startSession() async {
+    if (_viewModel.sessionStage == LivePitchSessionStage.paused) {
+      throw StateError(
+        'Cannot start a new session while a session is paused. '
+        'Resume or stop the current session first.',
+      );
+    }
     final permission = await Permission.microphone.request();
     if (!permission.isGranted) {
       final isPermanent =
@@ -204,7 +210,25 @@ class LivePitchController extends ChangeNotifier {
           'Audio capture was interrupted by the OS or another app. The session was safely stopped and saved.',
     );
     notifyListeners();
-    await stopSession();
+    try {
+      await stopSession();
+    } on SessionPersistenceError catch (error) {
+      _viewModel = _viewModel.copyWith(
+        failureState: LivePitchFailureState.audioInterrupted,
+        errorMessage:
+            'Audio capture was interrupted and the session could not be saved: $error',
+      );
+      notifyListeners();
+    } on AudioBridgeException catch (error) {
+      _viewModel = _viewModel.copyWith(
+        failureState: LivePitchFailureState.audioInterrupted,
+        errorMessage:
+            'Audio capture was interrupted and the audio session could not be cleanly stopped: $error',
+      );
+      notifyListeners();
+    } catch (_) {
+      // Swallow any unexpected errors to avoid propagating from a lifecycle callback.
+    }
   }
 
   Future<bool> openPermissionSettings() {
