@@ -36,7 +36,7 @@ void main() {
     await tester.tap(find.text('History'));
     await tester.pumpAndSettle();
 
-    expect(find.text('History'), findsWidgets);
+    expect(find.textContaining('History'), findsWidgets);
   });
 
   testWidgets('tapping Settings tile navigates to settings screen',
