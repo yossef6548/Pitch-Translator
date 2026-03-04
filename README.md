@@ -102,6 +102,18 @@ Why this matters:
   and exposes `init()`, `startSession()`, `pause()`, `resume()`, `stopSession()`, and `dispose()`.
 - `LivePitchController` subscribes to `NativeAudioBridge.frames()`, forwards frames to `TrainingEngine.onDspFrame()`, aggregates session metrics (average error, stability score, drift count, duration), and persists sessions + drift events on stop.
 
+## 6) Live session UX hardening for production users
+
+- Added a pre-permission live session explanation before microphone request, clarifying why mic access is required and what data is persisted.
+- Added dedicated failure UI states for:
+  - permission denied
+  - no input detected
+  - unsupported device/plugin path
+  - audio interrupted
+- Added denied-permanently recovery UX with OS settings instructions and an in-app deep-link action to open app settings.
+- Session controls now enforce a tighter start/pause/resume/stop flow based on controller stage state. Start is only enabled in `prePermission`, `ready`, and `completed` stages (not while paused or running), preventing a paused session from being discarded by an accidental new start.
+- Stop flow now prioritizes safe session persistence even when native stop throws (for example after interruption/focus churn), then reports stop errors after persistence succeeds.
+
 ---
 
 # Repository structure

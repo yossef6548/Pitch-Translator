@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
 import '../../exercises/exercise_catalog.dart';
@@ -20,9 +21,9 @@ class LivePitchController extends ChangeNotifier {
     NativeAudioBridge? bridge,
     TrainingEngine? engine,
     SessionRepository? sessionRepository,
-  })  : _bridge = bridge ?? NativeAudioBridge(),
-        _engine = engine ?? TrainingEngine(config: config),
-        _sessionRepository = sessionRepository ?? SessionRepository.instance;
+  }) : _bridge = bridge ?? NativeAudioBridge(),
+       _engine = engine ?? TrainingEngine(config: config),
+       _sessionRepository = sessionRepository ?? SessionRepository.instance;
 
   final ExerciseDefinition exercise;
   final LevelId level;
@@ -55,6 +56,30 @@ class LivePitchController extends ChangeNotifier {
   }
 
   Future<void> startSession() async {
+    if (_viewModel.sessionStage == LivePitchSessionStage.paused) {
+      throw StateError(
+        'Cannot start a new session while a session is paused. '
+        'Resume or stop the current session first.',
+      );
+    }
+    final permission = await Permission.microphone.request();
+    if (!permission.isGranted) {
+      final isPermanent =
+          permission.isPermanentlyDenied ||
+          permission.isRestricted ||
+          permission.isLimited;
+      _viewModel = _viewModel.copyWith(
+        running: false,
+        sessionStage: LivePitchSessionStage.prePermission,
+        failureState: LivePitchFailureState.permissionDenied,
+        errorMessage: isPermanent
+            ? 'Microphone access is permanently denied. Open app settings and enable microphone permission to continue.'
+            : 'Microphone permission is required to start live pitch tracking.',
+      );
+      notifyListeners();
+      throw AudioBridgeException(AudioBridgeFailure.permissionDenied);
+    }
+
     _resetMetrics();
     _firstFrameCompleter = Completer<void>();
     try {
@@ -70,12 +95,16 @@ class LivePitchController extends ChangeNotifier {
       _viewModel = const LivePitchViewModel.initial().copyWith(
         running: true,
         uiState: _engine.state,
+        sessionStage: LivePitchSessionStage.running,
         clearError: true,
+        clearFailure: true,
       );
       notifyListeners();
     } on AudioBridgeException catch (error) {
       _viewModel = _viewModel.copyWith(
         running: false,
+        sessionStage: LivePitchSessionStage.ready,
+        failureState: _toFailureState(error.failure),
         errorMessage: _toActionableMessage(error.failure),
       );
       notifyListeners();
@@ -86,7 +115,11 @@ class LivePitchController extends ChangeNotifier {
   Future<void> pause() async {
     await _bridge.stop();
     _engine.onIntent(TrainingIntent.pause);
-    _viewModel = _viewModel.copyWith(running: false, uiState: _engine.state);
+    _viewModel = _viewModel.copyWith(
+      running: false,
+      uiState: _engine.state,
+      sessionStage: LivePitchSessionStage.paused,
+    );
     notifyListeners();
   }
 
@@ -96,20 +129,36 @@ class LivePitchController extends ChangeNotifier {
     _viewModel = _viewModel.copyWith(
       running: true,
       uiState: _engine.state,
+      sessionStage: LivePitchSessionStage.running,
       clearError: true,
+      clearFailure: true,
     );
     notifyListeners();
   }
 
   Future<void> stopSession() async {
-    await _bridge.stop();
+    AudioBridgeException? stopError;
+    try {
+      await _bridge.stop();
+    } on AudioBridgeException catch (error) {
+      stopError = error;
+    }
     _engine.onIntent(TrainingIntent.stop);
     final endedAtMs = DateTime.now().millisecondsSinceEpoch;
     final startedAtMs = _startedAtMs;
-    _viewModel = _viewModel.copyWith(running: false, uiState: _engine.state);
+    _viewModel = _viewModel.copyWith(
+      running: false,
+      uiState: _engine.state,
+      sessionStage: LivePitchSessionStage.completed,
+    );
     notifyListeners();
 
-    if (startedAtMs == null) return;
+    if (startedAtMs == null) {
+      if (stopError != null) {
+        throw stopError;
+      }
+      return;
+    }
 
     try {
       final avgError = _absErrors.isEmpty
@@ -148,6 +197,42 @@ class LivePitchController extends ChangeNotifier {
     } catch (error) {
       throw SessionPersistenceError('Failed to persist session: $error');
     }
+
+    if (stopError != null) {
+      throw stopError;
+    }
+  }
+
+  Future<void> handleAudioInterruption() async {
+    _viewModel = _viewModel.copyWith(
+      failureState: LivePitchFailureState.audioInterrupted,
+      errorMessage:
+          'Audio capture was interrupted by the OS or another app. The session was safely stopped and saved.',
+    );
+    notifyListeners();
+    try {
+      await stopSession();
+    } on SessionPersistenceError catch (error) {
+      _viewModel = _viewModel.copyWith(
+        failureState: LivePitchFailureState.audioInterrupted,
+        errorMessage:
+            'Audio capture was interrupted and the session could not be saved: $error',
+      );
+      notifyListeners();
+    } on AudioBridgeException catch (error) {
+      _viewModel = _viewModel.copyWith(
+        failureState: LivePitchFailureState.audioInterrupted,
+        errorMessage:
+            'Audio capture was interrupted and the audio session could not be cleanly stopped: $error',
+      );
+      notifyListeners();
+    } catch (_) {
+      // Swallow any unexpected errors to avoid propagating from a lifecycle callback.
+    }
+  }
+
+  Future<bool> openPermissionSettings() {
+    return openAppSettings();
   }
 
   @override
@@ -226,6 +311,20 @@ class LivePitchController extends ChangeNotifier {
         return 'Native audio engine is unavailable on this build. Restart the app or reinstall the latest version.';
       case AudioBridgeFailure.unknown:
         return 'Unexpected audio error. Restart the app and try again.';
+    }
+  }
+
+  LivePitchFailureState _toFailureState(AudioBridgeFailure failure) {
+    switch (failure) {
+      case AudioBridgeFailure.permissionDenied:
+        return LivePitchFailureState.permissionDenied;
+      case AudioBridgeFailure.noFramesTimeout:
+        return LivePitchFailureState.noInputDetected;
+      case AudioBridgeFailure.pluginUnavailable:
+        return LivePitchFailureState.unsupportedDevice;
+      case AudioBridgeFailure.audioFocusDenied:
+      case AudioBridgeFailure.unknown:
+        return LivePitchFailureState.audioInterrupted;
     }
   }
 

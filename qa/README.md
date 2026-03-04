@@ -20,6 +20,8 @@ Latest pass updates included:
 - Drift snippet replay file loading now uses bounded file IO to avoid unresolved async waits in edge-path tests.
 - Drift replay widget tests were stabilized by avoiding async file writes in `testWidgets` fake-async context.
 - Library screen loading now falls back to deterministic empty-state values if repository/database access is unavailable.
+- Live pitch UX now exposes explicit user-visible failure states (permission denied, no input, unsupported device, interrupted audio) and permission recovery guidance with app-settings deep-link action.
+- Live pitch session controls are now stage-gated (start/pause/resume/stop), and stop attempts persist analytics safely even if audio stop throws during interruption scenarios.
 
 This validation pass additionally executed focused in-container checks:
 
