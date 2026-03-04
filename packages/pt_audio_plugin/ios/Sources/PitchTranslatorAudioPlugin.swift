@@ -177,10 +177,13 @@ public final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterS
   }
 
   private func releaseAudioResources() {
-    engine.inputNode.removeTap(onBus: 0)
+    // Stop the engine first so the audio tap callback can no longer fire.
+    // AVAudioEngine.stop() drains the render graph synchronously, guaranteeing
+    // no further processAudio() calls before we free the DSP handle.
     if engine.isRunning {
       engine.stop()
     }
+    engine.inputNode.removeTap(onBus: 0)
     if let handle = dspHandle {
       pt_dsp_free(handle)
       dspHandle = nil
@@ -194,7 +197,11 @@ public final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterS
   }
 
   private func processAudio(buffer: AVAudioPCMBuffer) {
-    guard let sink = eventSink,
+    // Guard isRunning before accessing dspHandle: releaseAudioResources() stops
+    // the engine (draining callbacks) before freeing the DSP handle, so this
+    // check and the subsequent dspHandle read are safe on the audio thread.
+    guard isRunning,
+          let sink = eventSink,
           let dsp = dspHandle,
           let channel = buffer.floatChannelData?.pointee else { return }
 

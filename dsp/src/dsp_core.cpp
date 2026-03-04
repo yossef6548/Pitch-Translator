@@ -390,13 +390,9 @@ DSPFrameOutput pt_dsp_process(PT_DSP* dsp, const float* mono_samples, int num_sa
     dsp->process_calls += 1;
     dsp->process_total_us += elapsed_us;
     dsp->process_max_us = std::max(dsp->process_max_us, elapsed_us);
-    if (dsp->process_calls % 600 == 0) {
-        const double avg_us = static_cast<double>(dsp->process_total_us) / static_cast<double>(dsp->process_calls);
-        std::fprintf(stderr, "[pt_dsp] process calls=%llu avg_us=%.2f max_us=%llu\n",
-                     static_cast<unsigned long long>(dsp->process_calls),
-                     avg_us,
-                     static_cast<unsigned long long>(dsp->process_max_us));
-    }
+    // Counters are accumulated for external inspection via pt_dsp_query_timing().
+    // Avoid fprintf here: this function runs on the realtime audio thread, and
+    // blocking I/O can cause audible glitches or trigger watchdog timeouts.
 #endif
     return out;
 }
