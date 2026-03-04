@@ -266,3 +266,27 @@ Generated fixture snapshot (`fixtures.txt` → runtime WAVs):
 - unvoiced confidence (1s appended silence): `0.0` for all samples
 
 These gates now enforce shipping criteria for v1 scope (mean abs cents, voiced confidence floor, unvoiced confidence ceiling) across both synthetic and recorded fixtures.
+
+---
+
+## CI quality gates (GitHub Actions)
+
+Automated quality gates now run in `.github/workflows/ci.yml` for both pull requests and pushes targeting `main`.
+
+CI jobs:
+
+- **Flutter:** `flutter analyze` and `flutter test` (from `apps/mobile_flutter`).
+- **DSP:** `cmake -S dsp -B build/dsp`, `cmake --build build/dsp`, `ctest --test-dir build/dsp`, and explicit execution of `pt_dsp_voice_validation`.
+- **Android:** native C++ bridge CMake configure/build (`native/android/src/main/cpp`) plus `flutter build apk --debug`.
+- **iOS:** `flutter build ios --debug --no-codesign` on macOS runner.
+
+## Pre-merge checks for `main`
+
+To enforce “CI must be green before merge”, configure branch protection (or repository rulesets) for `main` in GitHub settings and require the `CI` workflow to pass before allowing merge.
+
+Recommended required status checks are all jobs in the `CI` workflow:
+
+- `Flutter analyze + test`
+- `DSP cmake + ctest + validation`
+- `Android native build + debug APK`
+- `iOS build (no signing)`

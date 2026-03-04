@@ -81,7 +81,7 @@ flutter test test/training_engine_test.dart
 flutter test test/exercises/progression_engine_test.dart
 cmake -S dsp -B /tmp/pt-dsp-build
 cmake --build /tmp/pt-dsp-build
-/tmp/pt-dsp-build/pt_dsp_tests
+ctest --test-dir /tmp/pt-dsp-build --output-on-failure
 /tmp/pt-dsp-build/pt_dsp_voice_validation
 ```
 
@@ -106,3 +106,13 @@ Guidelines:
 - Keep frame cadence near 5–10 ms.
 - Assert deterministic exposed state (avoid visual-only approximations).
 - Name fixtures with QA IDs where possible.
+
+
+## CI alignment
+
+GitHub Actions now enforces these automated quality gates on PRs to `main` via `.github/workflows/ci.yml`:
+
+- Flutter analyze + full test suite
+- DSP CMake build + `ctest` + `pt_dsp_voice_validation`
+- Android native CMake build + debug APK assembly
+- iOS no-signing build
