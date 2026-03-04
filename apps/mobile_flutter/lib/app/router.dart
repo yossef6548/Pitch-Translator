@@ -28,7 +28,10 @@ Route<dynamic> onGenerateRoute(RouteSettings settings) {
     case AppRoutes.exerciseSelect:
       return MaterialPageRoute(builder: (_) => const ExerciseSelectScreen());
     case AppRoutes.livePitch:
-      final args = settings.arguments as LivePitchRouteArgs;
+      final args = settings.arguments as LivePitchRouteArgs?;
+      if (args == null) {
+        return MaterialPageRoute(builder: (_) => const ExerciseSelectScreen());
+      }
       return MaterialPageRoute(
         builder: (_) => LivePitchScreen(
           exercise: args.exercise,

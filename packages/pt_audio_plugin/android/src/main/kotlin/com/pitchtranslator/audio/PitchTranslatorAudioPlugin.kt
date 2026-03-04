@@ -34,7 +34,7 @@ class PitchTranslatorAudioPlugin :
   private lateinit var context: Context
   private var methodChannel: MethodChannel? = null
   private var frameChannel: EventChannel? = null
-  private var sink: EventChannel.EventSink? = null
+  @Volatile private var sink: EventChannel.EventSink? = null
 
   private var activity: Activity? = null
   private var activityBinding: ActivityPluginBinding? = null
@@ -69,7 +69,7 @@ class PitchTranslatorAudioPlugin :
   }
 
   private val engine = NativeAaudioEngine { frame ->
-    sink?.success(frame)
+    deviceRestartHandler.post { sink?.success(frame) }
   }
 
   override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -231,8 +231,9 @@ class PitchTranslatorAudioPlugin :
   }
 
   override fun onPause(owner: LifecycleOwner) {
-    restartOnResume = engine.isRunning()
-    engine.stop()
+    val wasRunning = engine.isRunning()
+    stopEngineWithFocusRelease()
+    restartOnResume = wasRunning
   }
 
   override fun onResume(owner: LifecycleOwner) {

@@ -67,10 +67,21 @@ class NativeAudioBridge {
   }
 
   Future<void> dispose() async {
-    _isRunning = false;
-    _startedSuccessfully = false;
-    _usingSimulation = false;
-    _cachedStream = null;
+    try {
+      if (_isRunning) {
+        // Ensure native capture is stopped even if callers forgot to call stop().
+        await stop();
+      }
+    } on MissingPluginException {
+      // Plugin not available (e.g., during tests or teardown) — ignore.
+    } on PlatformException {
+      // Native side may already be torn down — ignore during dispose.
+    } finally {
+      _isRunning = false;
+      _startedSuccessfully = false;
+      _usingSimulation = false;
+      _cachedStream = null;
+    }
   }
 
   Future<bool> _tryStartNative() async {
