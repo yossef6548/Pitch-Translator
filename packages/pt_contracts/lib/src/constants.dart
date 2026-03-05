@@ -23,5 +23,4 @@ class PtConstants {
   static const double driftConfirmedSaturation = 0.4;
 
   static const int defaultCountdownMs = 3000;
-  static const double semitoneWidthPx = 160.0;
 }

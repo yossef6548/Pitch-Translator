@@ -52,4 +52,32 @@ void main() {
     expect(engine.lastDriftEvent!.beforeMidi, 69);
     expect(engine.lastDriftEvent!.afterCents, 40);
   });
+
+test('drift confirmed in drift-awareness persists until within tolerance then seeking lock', () {
+  final engine = TrainingEngine(
+    config: const ExerciseConfig(
+      countdownMs: 0,
+      driftAwarenessMode: true,
+      driftThresholdCents: 30,
+      toleranceCents: 20,
+    ),
+  );
+  engine.onIntent(TrainingIntent.start);
+
+  engine.onDspFrame(dspFrame(0, cents: 5));
+  engine.onDspFrame(dspFrame(160, cents: 5));
+  engine.onDspFrame(dspFrame(360, cents: 5));
+  engine.onDspFrame(dspFrame(980, cents: 40));
+  engine.onDspFrame(dspFrame(1120, cents: 40));
+  engine.onDspFrame(dspFrame(1300, cents: 40));
+
+  expect(engine.state.id, LivePitchStateId.driftConfirmed);
+
+  engine.onDspFrame(dspFrame(1360, cents: 25));
+  expect(engine.state.id, LivePitchStateId.driftConfirmed);
+
+  engine.onDspFrame(dspFrame(1460, cents: 10));
+  expect(engine.state.id, LivePitchStateId.seekingLock);
+});
+
 }

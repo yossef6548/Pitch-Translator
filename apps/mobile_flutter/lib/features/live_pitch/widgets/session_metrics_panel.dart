@@ -6,13 +6,15 @@ class SessionMetricsPanel extends StatelessWidget {
   const SessionMetricsPanel({
     super.key,
     required this.avgErrorCents,
-    required this.stabilityScore,
+    required this.stabilityCents,
+    required this.lockRatio,
     required this.driftCount,
     required this.duration,
   });
 
   final double avgErrorCents;
-  final double stabilityScore;
+  final double stabilityCents;
+  final double lockRatio;
   final int driftCount;
   final Duration duration;
 
@@ -25,7 +27,8 @@ class SessionMetricsPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Avg error: ${avgErrorCents.toStringAsFixed(1)} cents'),
-            Text('Stability: ${stabilityScore.toStringAsFixed(1)}%'),
+            Text('Stability (std dev): ${stabilityCents.toStringAsFixed(1)} cents'),
+            Text('Lock ratio: ${(lockRatio * 100).toStringAsFixed(1)}%'),
             Text('Drift count: $driftCount'),
             Text('Duration: ${formatDuration(duration)}'),
           ],

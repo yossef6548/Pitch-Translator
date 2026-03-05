@@ -57,7 +57,8 @@ class SessionDetailsScreen extends StatelessWidget {
           ListTile(title: const Text('Exercise'), subtitle: Text(session.exerciseId)),
           ListTile(title: const Text('Mode'), subtitle: Text(session.modeLabel)),
           ListTile(title: const Text('Avg Error'), subtitle: Text('${session.avgErrorCents.toStringAsFixed(1)} cents')),
-          ListTile(title: const Text('Stability'), subtitle: Text('${session.stabilityScore.toStringAsFixed(1)}%')),
+          ListTile(title: const Text('Stability (std dev)'), subtitle: Text('${session.stabilityCents.toStringAsFixed(1)} cents')),
+          ListTile(title: const Text('Lock ratio'), subtitle: Text('${(session.lockRatio * 100).toStringAsFixed(1)}%')),
           ListTile(title: const Text('Drift Events'), subtitle: Text('${session.driftCount}')),
           ListTile(
             title: const Text('Duration'),

@@ -123,7 +123,7 @@ void main() {
     await db.close();
   }
 
-  test('migrates v1-v4 databases to v5 schema and indexes', () async {
+  test('migrates v1-v4 databases to v6 schema and indexes', () async {
     for (final oldVersion in [1, 2, 3, 4]) {
       final dbPath = p.join(tempDir.path, 'legacy_v$oldVersion.db');
       await createDbAtVersion(dbPath, oldVersion);
@@ -135,7 +135,7 @@ void main() {
 
       final db = await openDatabase(dbPath);
       final versionRows = await db.rawQuery('PRAGMA user_version');
-      expect((versionRows.first['user_version'] as num).toInt(), 5);
+      expect((versionRows.first['user_version'] as num).toInt(), 6);
 
       final driftColumns = await db.rawQuery('PRAGMA table_info(drift_events)');
       final driftColumnNames =
@@ -147,6 +147,12 @@ void main() {
       expect(driftColumnNames.contains('after_cents'), isTrue);
       expect(driftColumnNames.contains('after_freq_hz'), isTrue);
       expect(driftColumnNames.contains('audio_snippet_uri'), isTrue);
+
+      final sessionColumns = await db.rawQuery('PRAGMA table_info(sessions)');
+      final sessionColumnNames =
+          sessionColumns.map((row) => row['name'] as String).toSet();
+      expect(sessionColumnNames.contains('stability_cents'), isTrue);
+      expect(sessionColumnNames.contains('lock_ratio'), isTrue);
 
       final attemptIndexes = await db.rawQuery('PRAGMA index_list(attempts)');
       expect(
@@ -177,7 +183,8 @@ void main() {
       startedAtMs: 1000,
       endedAtMs: 2000,
       avgErrorCents: 10,
-      stabilityScore: 90,
+      stabilityCents: 9,
+      lockRatio: 0.9,
       driftCount: 0,
     );
 

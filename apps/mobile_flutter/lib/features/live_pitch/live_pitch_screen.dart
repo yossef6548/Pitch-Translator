@@ -84,7 +84,10 @@ class _LivePitchScreenState extends State<LivePitchScreen>
                   'Target: ${widget.config.targetNote}${widget.config.targetOctave}',
                 ),
                 const SizedBox(height: 16),
-                LivePitchMeter(state: vm.uiState),
+                LivePitchMeter(
+                  state: vm.uiState,
+                  onWidthMeasured: _controller.setSemitoneWidthPxW,
+                ),
                 const SizedBox(height: 16),
                 Text('State: ${vm.uiState.id.name}'),
                 Text('Cents: ${vm.uiState.displayCents} ${vm.uiState.arrow}'),
@@ -109,7 +112,8 @@ class _LivePitchScreenState extends State<LivePitchScreen>
                   ),
                 SessionMetricsPanel(
                   avgErrorCents: vm.avgErrorCents,
-                  stabilityScore: vm.stabilityScore,
+                  stabilityCents: vm.stabilityCents,
+                  lockRatio: vm.lockRatio,
                   driftCount: vm.driftCount,
                   duration: vm.duration,
                 ),

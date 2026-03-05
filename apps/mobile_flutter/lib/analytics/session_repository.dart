@@ -9,7 +9,8 @@ class SessionRecord {
     required this.startedAtMs,
     required this.endedAtMs,
     required this.avgErrorCents,
-    required this.stabilityScore,
+    required this.stabilityCents,
+    required this.lockRatio,
     required this.driftCount,
   });
 
@@ -19,7 +20,8 @@ class SessionRecord {
   final int startedAtMs;
   final int endedAtMs;
   final double avgErrorCents;
-  final double stabilityScore;
+  final double stabilityCents;
+  final double lockRatio;
   final int driftCount;
 
   int get durationMs => endedAtMs - startedAtMs;
@@ -32,7 +34,8 @@ class SessionRecord {
       startedAtMs: map['started_at_ms'] as int,
       endedAtMs: map['ended_at_ms'] as int,
       avgErrorCents: (map['avg_error_cents'] as num).toDouble(),
-      stabilityScore: (map['stability_score'] as num).toDouble(),
+      stabilityCents: ((map['stability_cents'] ?? map['stability_score']) as num).toDouble(),
+      lockRatio: ((map['lock_ratio'] as num?) ?? 0).toDouble(),
       driftCount: map['drift_count'] as int,
     );
   }
@@ -41,13 +44,15 @@ class SessionRecord {
 class TrendSnapshot {
   const TrendSnapshot({
     required this.avgErrorCents,
-    required this.stabilityScore,
+    required this.stabilityCents,
+    required this.lockRatio,
     required this.driftPerSession,
     required this.sampleSize,
   });
 
   final double avgErrorCents;
-  final double stabilityScore;
+  final double stabilityCents;
+  final double lockRatio;
   final double driftPerSession;
   final int sampleSize;
 }
@@ -56,13 +61,15 @@ class TrendPoint {
   const TrendPoint({
     required this.endedAtMs,
     required this.avgErrorCents,
-    required this.stabilityScore,
+    required this.stabilityCents,
+    required this.lockRatio,
     required this.driftCount,
   });
 
   final int endedAtMs;
   final double avgErrorCents;
-  final double stabilityScore;
+  final double stabilityCents;
+  final double lockRatio;
   final int driftCount;
 }
 
@@ -220,7 +227,7 @@ class SessionRepository {
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 6,
         onCreate: (db, version) async => _createSchema(db),
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
@@ -234,6 +241,10 @@ class SessionRepository {
           }
           if (oldVersion < 5) {
             await _migrateToV5(db);
+    await _migrateToV6(db);
+          }
+          if (oldVersion < 6) {
+            await _migrateToV6(db);
           }
         },
       ),
@@ -252,6 +263,8 @@ class SessionRepository {
         ended_at_ms INTEGER NOT NULL,
         avg_error_cents REAL NOT NULL,
         stability_score REAL NOT NULL,
+        stability_cents REAL NOT NULL DEFAULT 0,
+        lock_ratio REAL NOT NULL DEFAULT 0,
         drift_count INTEGER NOT NULL
       )
     ''');
@@ -259,6 +272,7 @@ class SessionRepository {
     await _migrateToV3(db);
     await _migrateToV4(db);
     await _migrateToV5(db);
+    await _migrateToV6(db);
   }
 
   Future<void> _createV2Tables(Database db) async {
@@ -356,13 +370,33 @@ class SessionRepository {
     );
   }
 
+  Future<void> _migrateToV6(Database db) async {
+    final sessionColumns = await db.rawQuery('PRAGMA table_info(sessions)');
+    final existingColumns = sessionColumns.map((row) => row['name']).toSet();
+
+    if (!existingColumns.contains('stability_cents')) {
+      await db.execute(
+        'ALTER TABLE sessions ADD COLUMN stability_cents REAL NOT NULL DEFAULT 0',
+      );
+      await db.execute(
+        'UPDATE sessions SET stability_cents = stability_score WHERE stability_cents = 0',
+      );
+    }
+    if (!existingColumns.contains('lock_ratio')) {
+      await db.execute(
+        'ALTER TABLE sessions ADD COLUMN lock_ratio REAL NOT NULL DEFAULT 0',
+      );
+    }
+  }
+
   Future<int> recordSession({
     required String exerciseId,
     required String modeLabel,
     required int startedAtMs,
     required int endedAtMs,
     required double avgErrorCents,
-    required double stabilityScore,
+    required double stabilityCents,
+    required double lockRatio,
     required int driftCount,
   }) async {
     final db = await _database();
@@ -372,7 +406,9 @@ class SessionRepository {
       'started_at_ms': startedAtMs,
       'ended_at_ms': endedAtMs,
       'avg_error_cents': avgErrorCents,
-      'stability_score': stabilityScore,
+      'stability_score': stabilityCents,
+      'stability_cents': stabilityCents,
+      'lock_ratio': lockRatio,
       'drift_count': driftCount,
     });
   }
@@ -473,11 +509,12 @@ class SessionRepository {
       '''
       SELECT
         AVG(avg_error_cents) AS avg_error,
-        AVG(stability_score) AS stability,
+        AVG(stability_cents) AS stability,
+        AVG(lock_ratio) AS lock_ratio,
         AVG(drift_count) AS drift,
         COUNT(*) AS sample_size
       FROM (
-        SELECT avg_error_cents, stability_score, drift_count
+        SELECT avg_error_cents, stability_cents, lock_ratio, drift_count
         FROM sessions
         ORDER BY ended_at_ms DESC
         LIMIT ?
@@ -490,7 +527,8 @@ class SessionRepository {
     final sampleSize = (row['sample_size'] as num?)?.toInt() ?? 0;
     return TrendSnapshot(
       avgErrorCents: ((row['avg_error'] as num?) ?? 0).toDouble(),
-      stabilityScore: ((row['stability'] as num?) ?? 0).toDouble(),
+      stabilityCents: ((row['stability'] as num?) ?? 0).toDouble(),
+      lockRatio: ((row['lock_ratio'] as num?) ?? 0).toDouble(),
       driftPerSession: ((row['drift'] as num?) ?? 0).toDouble(),
       sampleSize: sampleSize,
     );
@@ -692,7 +730,7 @@ class SessionRepository {
       columns: [
         'ended_at_ms',
         'avg_error_cents',
-        'stability_score',
+        'stability_cents', 'lock_ratio',
         'drift_count',
       ],
       orderBy: 'ended_at_ms DESC',
@@ -704,7 +742,8 @@ class SessionRepository {
           (row) => TrendPoint(
             endedAtMs: row['ended_at_ms'] as int,
             avgErrorCents: (row['avg_error_cents'] as num).toDouble(),
-            stabilityScore: (row['stability_score'] as num).toDouble(),
+            stabilityCents: (row['stability_cents'] as num).toDouble(),
+            lockRatio: (row['lock_ratio'] as num).toDouble(),
             driftCount: (row['drift_count'] as num).toInt(),
           ),
         )
