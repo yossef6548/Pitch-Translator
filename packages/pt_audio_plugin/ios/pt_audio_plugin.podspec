@@ -10,10 +10,10 @@ Pod::Spec.new do |s|
   s.platform         = :ios, '13.0'
   s.swift_version    = '5.0'
 
-  s.source_files = [
-    'Sources/**/*.{swift,h,m,mm}',
-    '../../../dsp/src/**/*.{c,cc,cpp,h,hpp}'
-  ]
+  # dsp_core.cpp is vendored here from dsp/src/dsp_core.cpp so that CocoaPods
+  # can find all source files within the pod directory (relative paths that
+  # escape the pod root are not reliably resolved when Flutter uses symlinks).
+  s.source_files = 'Sources/**/*.{swift,h,m,mm,c,cc,cpp,hpp}'
 
   s.module_map = 'module.modulemap'
   s.pod_target_xcconfig = {
