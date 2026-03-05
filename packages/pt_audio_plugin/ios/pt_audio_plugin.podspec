@@ -12,14 +12,13 @@ Pod::Spec.new do |s|
 
   s.source_files = [
     'Sources/**/*.{swift,h,m,mm}',
-    '../../../dsp/include/pt_dsp/**/*.h',
     '../../../dsp/src/**/*.{c,cc,cpp,h,hpp}'
   ]
 
   s.module_map = 'module.modulemap'
   s.pod_target_xcconfig = {
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
-    'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/../../../dsp/include $(PODS_TARGET_SRCROOT)/Sources'
+    'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/Sources'
   }
 
   s.frameworks = 'AVFoundation'
