@@ -1,5 +1,6 @@
+import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class SessionRecord {
   SessionRecord({
@@ -217,12 +218,12 @@ class SessionRepository {
   Future<Database> _database() async {
     if (_db != null) return _db!;
 
+    final factory = _databaseFactory ?? _resolveDatabaseFactory();
     final dbPath = databasePathOverride ??
         p.join(
-          await (_databasesPathProvider?.call() ?? getDatabasesPath()),
+          await _resolveDatabasesPath(factory),
           'pitch_translator.db',
         );
-    final factory = _databaseFactory ?? databaseFactory;
 
     _db = await factory.openDatabase(
       dbPath,
@@ -241,6 +242,30 @@ class SessionRepository {
     );
 
     return _db!;
+  }
+
+  Future<String> _resolveDatabasesPath(DatabaseFactory factory) async {
+    if (_databasesPathProvider != null) {
+      return _databasesPathProvider.call();
+    }
+
+    try {
+      return await getDatabasesPath();
+    } on StateError {
+      if (identical(factory, databaseFactoryFfi)) {
+        return Directory.systemTemp.path;
+      }
+      rethrow;
+    }
+  }
+
+  DatabaseFactory _resolveDatabaseFactory() {
+    try {
+      return databaseFactory;
+    } on StateError {
+      sqfliteFfiInit();
+      return databaseFactoryFfi;
+    }
   }
 
   Future<void> _createSchema(Database db) async {
@@ -391,7 +416,6 @@ class SessionRepository {
     });
   }
 
-
   Future<Set<String>> masteredExerciseLevelKeys() async {
     final db = await _database();
     final rows = await db.rawQuery(
@@ -401,7 +425,9 @@ class SessionRepository {
       GROUP BY exercise_id, level_id
       ''',
     );
-    return rows.map((row) => '${row["exercise_id"]}:${row["level_id"]}').toSet();
+    return rows
+        .map((row) => '${row["exercise_id"]}:${row["level_id"]}')
+        .toSet();
   }
 
   Future<List<SessionRecord>> recentSessions({int limit = 20}) async {
@@ -646,7 +672,8 @@ class SessionRepository {
       columns: [
         'ended_at_ms',
         'avg_error_cents',
-        'stability_cents', 'lock_ratio',
+        'stability_cents',
+        'lock_ratio',
         'drift_count',
       ],
       orderBy: 'ended_at_ms DESC',
