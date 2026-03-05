@@ -9,7 +9,8 @@ class SessionRecord {
     required this.startedAtMs,
     required this.endedAtMs,
     required this.avgErrorCents,
-    required this.stabilityScore,
+    required this.stabilityCents,
+    required this.lockRatio,
     required this.driftCount,
   });
 
@@ -19,7 +20,8 @@ class SessionRecord {
   final int startedAtMs;
   final int endedAtMs;
   final double avgErrorCents;
-  final double stabilityScore;
+  final double stabilityCents;
+  final double lockRatio;
   final int driftCount;
 
   int get durationMs => endedAtMs - startedAtMs;
@@ -32,7 +34,8 @@ class SessionRecord {
       startedAtMs: map['started_at_ms'] as int,
       endedAtMs: map['ended_at_ms'] as int,
       avgErrorCents: (map['avg_error_cents'] as num).toDouble(),
-      stabilityScore: (map['stability_score'] as num).toDouble(),
+      stabilityCents: (map['stability_cents'] as num).toDouble(),
+      lockRatio: (map['lock_ratio'] as num).toDouble(),
       driftCount: map['drift_count'] as int,
     );
   }
@@ -41,13 +44,15 @@ class SessionRecord {
 class TrendSnapshot {
   const TrendSnapshot({
     required this.avgErrorCents,
-    required this.stabilityScore,
+    required this.stabilityCents,
+    required this.lockRatio,
     required this.driftPerSession,
     required this.sampleSize,
   });
 
   final double avgErrorCents;
-  final double stabilityScore;
+  final double stabilityCents;
+  final double lockRatio;
   final double driftPerSession;
   final int sampleSize;
 }
@@ -56,13 +61,15 @@ class TrendPoint {
   const TrendPoint({
     required this.endedAtMs,
     required this.avgErrorCents,
-    required this.stabilityScore,
+    required this.stabilityCents,
+    required this.lockRatio,
     required this.driftCount,
   });
 
   final int endedAtMs;
   final double avgErrorCents;
-  final double stabilityScore;
+  final double stabilityCents;
+  final double lockRatio;
   final int driftCount;
 }
 
@@ -220,21 +227,15 @@ class SessionRepository {
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 6,
         onCreate: (db, version) async => _createSchema(db),
         onUpgrade: (db, oldVersion, newVersion) async {
-          if (oldVersion < 2) {
-            await _createV2Tables(db);
-          }
-          if (oldVersion < 3) {
-            await _migrateToV3(db);
-          }
-          if (oldVersion < 4) {
-            await _migrateToV4(db);
-          }
-          if (oldVersion < 5) {
-            await _migrateToV5(db);
-          }
+          // Drop in reverse foreign-key dependency order before recreating.
+          await db.execute('DROP TABLE IF EXISTS mastery_history');
+          await db.execute('DROP TABLE IF EXISTS drift_events');
+          await db.execute('DROP TABLE IF EXISTS attempts');
+          await db.execute('DROP TABLE IF EXISTS sessions');
+          await _createSchema(db);
         },
       ),
     );
@@ -251,17 +252,11 @@ class SessionRepository {
         started_at_ms INTEGER NOT NULL,
         ended_at_ms INTEGER NOT NULL,
         avg_error_cents REAL NOT NULL,
-        stability_score REAL NOT NULL,
+        stability_cents REAL NOT NULL DEFAULT 0,
+        lock_ratio REAL NOT NULL DEFAULT 0,
         drift_count INTEGER NOT NULL
       )
     ''');
-    await _createV2Tables(db);
-    await _migrateToV3(db);
-    await _migrateToV4(db);
-    await _migrateToV5(db);
-  }
-
-  Future<void> _createV2Tables(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS attempts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -271,6 +266,9 @@ class SessionRepository {
         assisted INTEGER NOT NULL,
         success INTEGER NOT NULL,
         created_at_ms INTEGER NOT NULL,
+        target_note TEXT,
+        target_octave INTEGER,
+        avg_error_cents REAL,
         FOREIGN KEY(session_id) REFERENCES sessions(id)
       )
     ''');
@@ -280,6 +278,13 @@ class SessionRepository {
         session_id INTEGER NOT NULL,
         event_index INTEGER NOT NULL,
         confirmed_at_ms INTEGER NOT NULL,
+        before_midi INTEGER,
+        before_cents REAL,
+        before_freq_hz REAL,
+        after_midi INTEGER,
+        after_cents REAL,
+        after_freq_hz REAL,
+        audio_snippet_uri TEXT,
         FOREIGN KEY(session_id) REFERENCES sessions(id)
       )
     ''');
@@ -293,61 +298,6 @@ class SessionRepository {
         FOREIGN KEY(source_session_id) REFERENCES sessions(id)
       )
     ''');
-  }
-
-  Future<void> _migrateToV3(Database db) async {
-    final attemptsColumns = await db.rawQuery('PRAGMA table_info(attempts)');
-    final existingColumns = attemptsColumns.map((row) => row['name']).toSet();
-
-    if (!existingColumns.contains('target_note')) {
-      await db.execute('ALTER TABLE attempts ADD COLUMN target_note TEXT');
-    }
-    if (!existingColumns.contains('target_octave')) {
-      await db.execute('ALTER TABLE attempts ADD COLUMN target_octave INTEGER');
-    }
-    if (!existingColumns.contains('avg_error_cents')) {
-      await db.execute('ALTER TABLE attempts ADD COLUMN avg_error_cents REAL');
-    }
-  }
-
-  Future<void> _migrateToV4(Database db) async {
-    final driftColumns = await db.rawQuery('PRAGMA table_info(drift_events)');
-    final existingColumns = driftColumns.map((row) => row['name']).toSet();
-
-    if (!existingColumns.contains('before_midi')) {
-      await db.execute(
-        'ALTER TABLE drift_events ADD COLUMN before_midi INTEGER',
-      );
-    }
-    if (!existingColumns.contains('before_cents')) {
-      await db.execute('ALTER TABLE drift_events ADD COLUMN before_cents REAL');
-    }
-    if (!existingColumns.contains('before_freq_hz')) {
-      await db.execute(
-        'ALTER TABLE drift_events ADD COLUMN before_freq_hz REAL',
-      );
-    }
-    if (!existingColumns.contains('after_midi')) {
-      await db.execute(
-        'ALTER TABLE drift_events ADD COLUMN after_midi INTEGER',
-      );
-    }
-    if (!existingColumns.contains('after_cents')) {
-      await db.execute('ALTER TABLE drift_events ADD COLUMN after_cents REAL');
-    }
-    if (!existingColumns.contains('after_freq_hz')) {
-      await db.execute(
-        'ALTER TABLE drift_events ADD COLUMN after_freq_hz REAL',
-      );
-    }
-    if (!existingColumns.contains('audio_snippet_uri')) {
-      await db.execute(
-        'ALTER TABLE drift_events ADD COLUMN audio_snippet_uri TEXT',
-      );
-    }
-  }
-
-  Future<void> _migrateToV5(Database db) async {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_attempts_lookup ON attempts(exercise_id, level_id, created_at_ms, success, assisted)',
     );
@@ -362,7 +312,8 @@ class SessionRepository {
     required int startedAtMs,
     required int endedAtMs,
     required double avgErrorCents,
-    required double stabilityScore,
+    required double stabilityCents,
+    required double lockRatio,
     required int driftCount,
   }) async {
     final db = await _database();
@@ -372,7 +323,8 @@ class SessionRepository {
       'started_at_ms': startedAtMs,
       'ended_at_ms': endedAtMs,
       'avg_error_cents': avgErrorCents,
-      'stability_score': stabilityScore,
+      'stability_cents': stabilityCents,
+      'lock_ratio': lockRatio,
       'drift_count': driftCount,
     });
   }
@@ -473,11 +425,12 @@ class SessionRepository {
       '''
       SELECT
         AVG(avg_error_cents) AS avg_error,
-        AVG(stability_score) AS stability,
+        AVG(stability_cents) AS stability,
+        AVG(lock_ratio) AS lock_ratio,
         AVG(drift_count) AS drift,
         COUNT(*) AS sample_size
       FROM (
-        SELECT avg_error_cents, stability_score, drift_count
+        SELECT avg_error_cents, stability_cents, lock_ratio, drift_count
         FROM sessions
         ORDER BY ended_at_ms DESC
         LIMIT ?
@@ -490,7 +443,8 @@ class SessionRepository {
     final sampleSize = (row['sample_size'] as num?)?.toInt() ?? 0;
     return TrendSnapshot(
       avgErrorCents: ((row['avg_error'] as num?) ?? 0).toDouble(),
-      stabilityScore: ((row['stability'] as num?) ?? 0).toDouble(),
+      stabilityCents: ((row['stability'] as num?) ?? 0).toDouble(),
+      lockRatio: ((row['lock_ratio'] as num?) ?? 0).toDouble(),
       driftPerSession: ((row['drift'] as num?) ?? 0).toDouble(),
       sampleSize: sampleSize,
     );
@@ -692,7 +646,7 @@ class SessionRepository {
       columns: [
         'ended_at_ms',
         'avg_error_cents',
-        'stability_score',
+        'stability_cents', 'lock_ratio',
         'drift_count',
       ],
       orderBy: 'ended_at_ms DESC',
@@ -704,7 +658,8 @@ class SessionRepository {
           (row) => TrendPoint(
             endedAtMs: row['ended_at_ms'] as int,
             avgErrorCents: (row['avg_error_cents'] as num).toDouble(),
-            stabilityScore: (row['stability_score'] as num).toDouble(),
+            stabilityCents: (row['stability_cents'] as num).toDouble(),
+            lockRatio: (row['lock_ratio'] as num).toDouble(),
             driftCount: (row['drift_count'] as num).toInt(),
           ),
         )

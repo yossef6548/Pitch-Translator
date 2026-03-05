@@ -3,11 +3,14 @@ import 'dart:math';
 
 import 'package:pt_contracts/pt_contracts.dart';
 
+import 'dsp_ui_binder.dart';
+
 class TrainingEngine {
   TrainingEngine({ExerciseConfig? config})
       : _config = config ?? const ExerciseConfig();
 
   final ExerciseConfig _config;
+  double _semitoneWidthPxW = 160.0;
   LivePitchUiState state = const LivePitchUiState.idle();
 
   int? _lastTimestampMs;
@@ -24,6 +27,12 @@ class TrainingEngine {
   final List<int> _recoveryTimesMs = <int>[];
 
   int get confirmedDriftCount => _confirmedDriftCount;
+
+  void setSemitoneWidthPxW(double semitoneWidthPxW) {
+    if (!semitoneWidthPxW.isFinite || semitoneWidthPxW <= 0) return;
+    _semitoneWidthPxW = semitoneWidthPxW;
+  }
+
   double? get averageRecoveryTimeMs =>
       _recoveryTimesMs.isEmpty
           ? null
@@ -242,35 +251,13 @@ class TrainingEngine {
     final absError = effectiveError!.abs();
     final e = (absError / _config.driftThresholdCents).clamp(0.0, 1.0);
     final d = centsError == 0 ? 0 : (centsError > 0 ? 1 : -1);
-    final shouldRenderRigid =
-        next == LivePitchStateId.locked && absError <= _config.toleranceCents;
-    final xOffset = shouldRenderRigid
-        ? 0.0
-        : (centsError / 100.0) * PtConstants.semitoneWidthPx;
-    final deform = shouldRenderRigid ? 0.0 : e * PtConstants.maxDeformPx;
-
-    var saturation = 1.0 - (e * 0.6);
-    if (next == LivePitchStateId.locked)
-      saturation = PtConstants.lockedSaturation;
-    if (next == LivePitchStateId.seekingLock)
-      saturation = PtConstants.seekingLockSaturation;
-    if (next == LivePitchStateId.driftConfirmed)
-      saturation = PtConstants.driftConfirmedSaturation;
-
-    double haloIntensity;
-    if (next == LivePitchStateId.locked) {
-      haloIntensity = 1.0;
-    } else if (next == LivePitchStateId.seekingLock) {
-      final t = frame.timestampMs / 1000.0;
-      haloIntensity = 0.65 + 0.15 * sin(2 * pi * t / 1.2);
-    } else if (next == LivePitchStateId.driftConfirmed) {
-      haloIntensity = 0.2;
-    } else {
-      haloIntensity = 0.4 + 0.3 * e;
-    }
-
-    final arrow =
-        absError <= _config.toleranceCents ? '' : (centsError > 0 ? '↑' : '↓');
+    final binding = bindDspToUi(
+      frame: frame,
+      effectiveError: effectiveError,
+      state: next,
+      config: _config,
+      semitoneWidthPxW: _semitoneWidthPxW,
+    );
     return state.copyWith(
       id: next,
       currentMidi: LivePitchUiState.setValue(frame.nearestMidi),
@@ -279,13 +266,13 @@ class TrainingEngine {
       absError: absError,
       errorFactorE: e,
       directionD: d,
-      xOffsetPx: xOffset,
-      deformPx: deform,
-      saturation: saturation,
-      haloIntensity: haloIntensity,
-      errorReadoutVisible: true,
-      displayCents: '${centsError.round()}',
-      arrow: arrow,
+      xOffsetPx: binding.xOffsetPx,
+      deformPx: binding.deformPx,
+      saturation: binding.saturation,
+      haloIntensity: binding.haloIntensity,
+      errorReadoutVisible: binding.errorReadoutVisible,
+      displayCents: binding.displayCents,
+      arrow: binding.arrow,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'exercise_catalog.dart';
+import 'mastery_evaluator.dart';
 
 class SessionMetrics {
   final double avgError;
@@ -103,6 +104,10 @@ class SessionMetricsBuilder {
 }
 
 class ProgressionEngine {
+  ProgressionEngine({MasteryEvaluator? masteryEvaluator})
+      : _masteryEvaluator = masteryEvaluator ?? const MasteryEvaluator();
+
+  final MasteryEvaluator _masteryEvaluator;
   static const int failureAssistThreshold = 3;
   static const Duration skillDecayWindow = Duration(days: 30);
 
@@ -128,11 +133,11 @@ class ProgressionEngine {
   }
 
   bool isMastered(LevelId level, SessionMetrics metrics) {
-    final threshold = masteryThresholds[level]!;
-    return metrics.avgError <= threshold.avgErrorMax &&
-        metrics.stability <= threshold.stabilityMax &&
-        metrics.lockRatio >= threshold.lockRatioMin &&
-        metrics.driftCount <= threshold.driftCountMax;
+    return _masteryEvaluator.evaluate(
+      level: level,
+      metrics: metrics,
+      assisted: false,
+    );
   }
 
   ProgressSnapshot applyResult({
@@ -146,8 +151,16 @@ class ProgressionEngine {
     final now = attemptedAt ?? DateTime.now();
     final progressKey = _key(exerciseId, level);
     final current = _exerciseState[progressKey] ?? const ExerciseProgress();
-    final meetsMasteryMetrics = isMastered(level, metrics);
-    final mastered = meetsMasteryMetrics && !assisted;
+    final meetsMasteryMetrics = _masteryEvaluator.evaluate(
+      level: level,
+      metrics: metrics,
+      assisted: false,
+    );
+    final mastered = _masteryEvaluator.evaluate(
+      level: level,
+      metrics: metrics,
+      assisted: assisted,
+    );
 
     final bestMetrics = _betterMetrics(current.bestMetrics, metrics);
     _exerciseState[progressKey] = current.copyWith(

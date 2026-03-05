@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitch_translator/audio/native_audio_bridge.dart';
@@ -7,10 +8,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('NativeAudioBridge', () {
-    test('defaults simulation fallback on for test/debug mode', () {
+    test('default simulation fallback matches build mode', () {
       final bridge = NativeAudioBridge();
 
-      expect(bridge.enableSimulationFallback, isTrue);
+      expect(bridge.enableSimulationFallback, equals(!kReleaseMode));
     });
 
     test(

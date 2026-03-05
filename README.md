@@ -315,3 +315,25 @@ Recommended required status checks are all jobs in the `CI` workflow:
 - `DSP cmake + ctest + validation`
 - `Android native build + debug APK`
 - `iOS build (no signing)`
+
+## Device-less QA workflow (Ubuntu container)
+
+Use deterministic trace injection (no microphone / no platform plugin dependency):
+
+```bash
+cd apps/mobile_flutter
+flutter test test/qa/replay_harness_test.dart
+flutter test test/qa/qa_matrix_test.dart
+flutter test test/training/dsp_ui_binder_test.dart
+```
+
+To add a new QA trace:
+
+1. Add a JSONL frame stream file under `qa/traces/`.
+2. Parse and run it with `ReplayHarness.parseJsonl(...)` in a QA test.
+3. Assert both state transitions and numeric outputs (`xOffsetPx`, `displayCents`, lock ratio, etc.).
+
+## Android emulator limitations
+
+Emulator is supported for basic UI and navigation checks, but microphone capture fidelity is not considered release-grade.
+Prefer trace-injection mode for deterministic validation of live pitch behavior.

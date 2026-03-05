@@ -13,7 +13,8 @@ class LivePitchViewModel {
   const LivePitchViewModel({
     required this.uiState,
     required this.avgErrorCents,
-    required this.stabilityScore,
+    required this.stabilityCents,
+    required this.lockRatio,
     required this.driftCount,
     required this.duration,
     required this.running,
@@ -25,7 +26,8 @@ class LivePitchViewModel {
   const LivePitchViewModel.initial()
     : uiState = const LivePitchUiState.idle(),
       avgErrorCents = 0,
-      stabilityScore = 0,
+      stabilityCents = 0,
+      lockRatio = 0,
       driftCount = 0,
       duration = Duration.zero,
       running = false,
@@ -35,7 +37,8 @@ class LivePitchViewModel {
 
   final LivePitchUiState uiState;
   final double avgErrorCents;
-  final double stabilityScore;
+  final double stabilityCents;
+  final double lockRatio;
   final int driftCount;
   final Duration duration;
   final bool running;
@@ -46,7 +49,8 @@ class LivePitchViewModel {
   LivePitchViewModel copyWith({
     LivePitchUiState? uiState,
     double? avgErrorCents,
-    double? stabilityScore,
+    double? stabilityCents,
+    double? lockRatio,
     int? driftCount,
     Duration? duration,
     bool? running,
@@ -59,7 +63,8 @@ class LivePitchViewModel {
     return LivePitchViewModel(
       uiState: uiState ?? this.uiState,
       avgErrorCents: avgErrorCents ?? this.avgErrorCents,
-      stabilityScore: stabilityScore ?? this.stabilityScore,
+      stabilityCents: stabilityCents ?? this.stabilityCents,
+      lockRatio: lockRatio ?? this.lockRatio,
       driftCount: driftCount ?? this.driftCount,
       duration: duration ?? this.duration,
       running: running ?? this.running,

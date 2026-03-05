@@ -182,18 +182,17 @@ void main() {
     expect(result.finalState.id, LivePitchStateId.driftConfirmed);
   });
 
-  test('QA-VD-01 cents to pixel mapping uses semitone width constant', () {
+  test('QA-VD-01 cents to pixel mapping uses layout-derived W', () {
     final engine = TrainingEngine(config: const ExerciseConfig(countdownMs: 0));
+    const w = 200.0;
+    engine.setSemitoneWidthPxW(w);
     engine.onIntent(TrainingIntent.start);
 
     final result = ReplayHarness(engine).runFrames([
       dspFrame(0, cents: 50),
     ]);
 
-    expect(
-      result.finalState.xOffsetPx,
-      closeTo(0.5 * PtConstants.semitoneWidthPx, 0.0001),
-    );
+    expect(result.finalState.xOffsetPx, closeTo(0.5 * w, 0.0001));
   });
 
   test('QA-VD-02 deformation hits max at drift threshold', () {

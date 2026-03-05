@@ -105,6 +105,12 @@ class NativeAudioBridge {
     try {
       final started = await _tryStartNative();
       _usingSimulation = !started;
+      if (kReleaseMode && _usingSimulation) {
+        throw StateError(
+          'Release build attempted to use simulated audio frames. '
+          'Simulation fallback is forbidden in release binaries.',
+        );
+      }
       _startedSuccessfully = started || enableSimulationFallback;
       _isRunning = true;
       _cachedStream = null;

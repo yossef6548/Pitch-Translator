@@ -45,6 +45,7 @@ class LivePitchController extends ChangeNotifier {
   int _activeDurationMs = 0;
   int _lockedDurationMs = 0;
   final List<double> _absErrors = <double>[];
+  final List<double> _effectiveErrors = <double>[];
   final List<DriftEventWrite> _driftEvents = <DriftEventWrite>[];
   int _lastRecordedDriftTimestamp = -1;
   Completer<void>? _firstFrameCompleter;
@@ -116,6 +117,10 @@ class LivePitchController extends ChangeNotifier {
     }
   }
 
+  void setSemitoneWidthPxW(double width) {
+    _engine.setSemitoneWidthPxW(width);
+  }
+
   Future<void> pause() async {
     try {
       await _bridge.stop();
@@ -177,9 +182,10 @@ class LivePitchController extends ChangeNotifier {
       final avgError = _absErrors.isEmpty
           ? 0.0
           : _absErrors.reduce((a, b) => a + b) / _absErrors.length;
-      final stability = _activeDurationMs == 0
+      final stability = _stdDev(_effectiveErrors);
+      final lockRatio = _activeDurationMs == 0
           ? 0.0
-          : (_lockedDurationMs / _activeDurationMs).clamp(0.0, 1.0) * 100.0;
+          : (_lockedDurationMs / _activeDurationMs).clamp(0.0, 1.0);
 
       final sessionId = await _sessionRepository.recordSession(
         exerciseId: exercise.id,
@@ -187,7 +193,8 @@ class LivePitchController extends ChangeNotifier {
         startedAtMs: startedAtMs,
         endedAtMs: endedAtMs,
         avgErrorCents: avgError,
-        stabilityScore: stability,
+        stabilityCents: stability,
+        lockRatio: lockRatio,
         driftCount: _driftEvents.length,
       );
 
@@ -298,6 +305,7 @@ class LivePitchController extends ChangeNotifier {
       final effectiveError = _engine.state.effectiveError;
       if (effectiveError != null) {
         _absErrors.add(effectiveError.abs());
+        _effectiveErrors.add(effectiveError);
       }
 
       final drift = _engine.lastDriftEvent;
@@ -324,17 +332,29 @@ class LivePitchController extends ChangeNotifier {
     final avgError = _absErrors.isEmpty
         ? 0.0
         : _absErrors.reduce((a, b) => a + b) / _absErrors.length;
-    final stability = _activeDurationMs == 0
+    final stability = _stdDev(_effectiveErrors);
+    final lockRatio = _activeDurationMs == 0
         ? 0.0
-        : (_lockedDurationMs / _activeDurationMs).clamp(0.0, 1.0) * 100.0;
+        : (_lockedDurationMs / _activeDurationMs).clamp(0.0, 1.0);
     _viewModel = _viewModel.copyWith(
       uiState: _engine.state,
       avgErrorCents: avgError,
-      stabilityScore: stability,
+      stabilityCents: stability,
+      lockRatio: lockRatio,
       driftCount: _driftEvents.length,
       duration: Duration(milliseconds: _activeDurationMs),
     );
     notifyListeners();
+  }
+
+  double _stdDev(List<double> values) {
+    if (values.isEmpty) return 0.0;
+    final mean = values.reduce((a, b) => a + b) / values.length;
+    final variance = values
+            .map((value) => (value - mean) * (value - mean))
+            .reduce((a, b) => a + b) /
+        values.length;
+    return math.sqrt(variance);
   }
 
   int _resolveEndedAtMs(int? startedAtMs) {
@@ -390,6 +410,7 @@ class LivePitchController extends ChangeNotifier {
     _activeDurationMs = 0;
     _lockedDurationMs = 0;
     _absErrors.clear();
+    _effectiveErrors.clear();
     _driftEvents.clear();
     _lastRecordedDriftTimestamp = -1;
   }
