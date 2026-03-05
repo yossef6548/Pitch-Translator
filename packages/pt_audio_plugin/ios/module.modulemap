@@ -1,5 +1,4 @@
-module pt_audio_plugin {
-  header "Sources/PitchTranslatorDSPBridge.h"
+framework module pt_audio_plugin {
+  header "PitchTranslatorDSPBridge.h"
   export *
-  module * { export * }
 }
