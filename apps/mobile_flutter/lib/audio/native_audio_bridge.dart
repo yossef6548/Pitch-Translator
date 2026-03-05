@@ -121,9 +121,7 @@ class NativeAudioBridge {
       _usingSimulation = false;
       _startedSuccessfully = false;
       _isRunning = false;
-      throw StateError(
-        'Native audio streaming is unavailable and simulation fallback is disabled.',
-      );
+      throw AudioBridgeException(AudioBridgeFailure.pluginUnavailable);
     } on AudioBridgeException {
       _usingSimulation = false;
       _startedSuccessfully = false;
