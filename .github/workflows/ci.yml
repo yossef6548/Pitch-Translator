@@ -62,6 +62,12 @@ jobs:
         run: flutter pub get
       - name: Create Android platform folder
         run: flutter create --platforms android .
+      - name: Set minSdkVersion to 26 for AAudio compatibility
+        run: |
+          # AAudio requires Android 8.0 (API 26). Replace whatever flutter.minSdkVersion
+          # resolves to in the generated gradle file with 26.
+          sed -i 's/minSdk = flutter\.minSdkVersion/minSdk = 26/g' android/app/build.gradle.kts 2>/dev/null || true
+          sed -i 's/minSdkVersion flutter\.minSdkVersion/minSdkVersion 26/g' android/app/build.gradle 2>/dev/null || true
       - name: Assemble release APK
         run: flutter build apk --release
 
