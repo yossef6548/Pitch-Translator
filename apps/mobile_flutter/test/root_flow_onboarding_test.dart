@@ -17,7 +17,7 @@ void main() {
     expect(find.text('Settings'), findsOneWidget);
   });
 
-  testWidgets('tapping Live Pitch tile navigates to live pitch screen',
+  testWidgets('tapping Live Pitch tile navigates to exercise select screen',
       (tester) async {
     await tester.pumpWidget(const PitchTranslatorApp());
     await tester.pumpAndSettle();
@@ -25,7 +25,7 @@ void main() {
     await tester.tap(find.text('Live Pitch'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Live Pitch'), findsWidgets);
+    expect(find.textContaining('Select Exercise'), findsWidgets);
   });
 
   testWidgets('tapping History tile navigates to history screen',
