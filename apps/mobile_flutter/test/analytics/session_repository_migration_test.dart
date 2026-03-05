@@ -33,144 +33,111 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
-  Future<void> createDbAtVersion(String dbPath, int version) async {
-    final db = await openDatabase(
-      dbPath,
-      version: version,
-      onCreate: (db, _) async {
-        await db.execute('''
-          CREATE TABLE sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            exercise_id TEXT NOT NULL,
-            mode_label TEXT NOT NULL,
-            started_at_ms INTEGER NOT NULL,
-            ended_at_ms INTEGER NOT NULL,
-            avg_error_cents REAL NOT NULL,
-            stability_score REAL NOT NULL,
-            drift_count INTEGER NOT NULL
-          )
-        ''');
+  test('fresh schema has all current v6 columns and indexes', () async {
+    final dbPath = p.join(tempDir.path, 'fresh.db');
+    final repository = SessionRepository.forTesting(databasePathOverride: dbPath);
+    await repository.recentSessions(limit: 1);
+    await repository.close();
 
-        if (version >= 2) {
-          await db.execute('''
-            CREATE TABLE attempts (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              session_id INTEGER NOT NULL,
-              exercise_id TEXT NOT NULL,
-              level_id TEXT NOT NULL,
-              assisted INTEGER NOT NULL,
-              success INTEGER NOT NULL,
-              created_at_ms INTEGER NOT NULL,
-              FOREIGN KEY(session_id) REFERENCES sessions(id)
-            )
-          ''');
-          await db.execute('''
-            CREATE TABLE drift_events (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              session_id INTEGER NOT NULL,
-              event_index INTEGER NOT NULL,
-              confirmed_at_ms INTEGER NOT NULL,
-              FOREIGN KEY(session_id) REFERENCES sessions(id)
-            )
-          ''');
-          await db.execute('''
-            CREATE TABLE mastery_history (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              exercise_id TEXT NOT NULL,
-              level_id TEXT NOT NULL,
-              mastered_at_ms INTEGER NOT NULL,
-              source_session_id INTEGER,
-              FOREIGN KEY(source_session_id) REFERENCES sessions(id)
-            )
-          ''');
-        }
+    final db = await openDatabase(dbPath);
+    final versionRows = await db.rawQuery('PRAGMA user_version');
+    expect((versionRows.first['user_version'] as num).toInt(), 6);
 
-        if (version >= 3) {
-          await db.execute('ALTER TABLE attempts ADD COLUMN target_note TEXT');
-          await db.execute(
-            'ALTER TABLE attempts ADD COLUMN target_octave INTEGER',
-          );
-          await db.execute(
-            'ALTER TABLE attempts ADD COLUMN avg_error_cents REAL',
-          );
-        }
+    final sessionColumns = await db.rawQuery('PRAGMA table_info(sessions)');
+    final sessionColumnNames =
+        sessionColumns.map((row) => row['name'] as String).toSet();
+    expect(sessionColumnNames.contains('stability_cents'), isTrue);
+    expect(sessionColumnNames.contains('lock_ratio'), isTrue);
+    expect(sessionColumnNames.contains('stability_score'), isFalse);
 
-        if (version >= 4) {
-          await db.execute(
-            'ALTER TABLE drift_events ADD COLUMN before_midi INTEGER',
-          );
-          await db.execute(
-            'ALTER TABLE drift_events ADD COLUMN before_cents REAL',
-          );
-          await db.execute(
-            'ALTER TABLE drift_events ADD COLUMN before_freq_hz REAL',
-          );
-          await db.execute(
-            'ALTER TABLE drift_events ADD COLUMN after_midi INTEGER',
-          );
-          await db.execute(
-            'ALTER TABLE drift_events ADD COLUMN after_cents REAL',
-          );
-          await db.execute(
-            'ALTER TABLE drift_events ADD COLUMN after_freq_hz REAL',
-          );
-          await db.execute(
-            'ALTER TABLE drift_events ADD COLUMN audio_snippet_uri TEXT',
-          );
-        }
-      },
+    final driftColumns = await db.rawQuery('PRAGMA table_info(drift_events)');
+    final driftColumnNames =
+        driftColumns.map((row) => row['name'] as String).toSet();
+    expect(driftColumnNames.contains('before_midi'), isTrue);
+    expect(driftColumnNames.contains('before_cents'), isTrue);
+    expect(driftColumnNames.contains('before_freq_hz'), isTrue);
+    expect(driftColumnNames.contains('after_midi'), isTrue);
+    expect(driftColumnNames.contains('after_cents'), isTrue);
+    expect(driftColumnNames.contains('after_freq_hz'), isTrue);
+    expect(driftColumnNames.contains('audio_snippet_uri'), isTrue);
+
+    final attemptColumns = await db.rawQuery('PRAGMA table_info(attempts)');
+    final attemptColumnNames =
+        attemptColumns.map((row) => row['name'] as String).toSet();
+    expect(attemptColumnNames.contains('target_note'), isTrue);
+    expect(attemptColumnNames.contains('target_octave'), isTrue);
+    expect(attemptColumnNames.contains('avg_error_cents'), isTrue);
+
+    final attemptIndexes = await db.rawQuery('PRAGMA index_list(attempts)');
+    expect(
+      attemptIndexes.any((row) => row['name'] == 'idx_attempts_lookup'),
+      isTrue,
     );
+
+    final masteryIndexes = await db.rawQuery(
+      'PRAGMA index_list(mastery_history)',
+    );
+    expect(
+      masteryIndexes.any((row) => row['name'] == 'idx_mastery_lookup'),
+      isTrue,
+    );
+
     await db.close();
-  }
-
-  test('migrates v1-v4 databases to v6 schema and indexes', () async {
-    for (final oldVersion in [1, 2, 3, 4]) {
-      final dbPath = p.join(tempDir.path, 'legacy_v$oldVersion.db');
-      await createDbAtVersion(dbPath, oldVersion);
-
-      final repository =
-          SessionRepository.forTesting(databasePathOverride: dbPath);
-      await repository.recentSessions(limit: 1);
-      await repository.close();
-
-      final db = await openDatabase(dbPath);
-      final versionRows = await db.rawQuery('PRAGMA user_version');
-      expect((versionRows.first['user_version'] as num).toInt(), 6);
-
-      final driftColumns = await db.rawQuery('PRAGMA table_info(drift_events)');
-      final driftColumnNames =
-          driftColumns.map((row) => row['name'] as String).toSet();
-      expect(driftColumnNames.contains('before_midi'), isTrue);
-      expect(driftColumnNames.contains('before_cents'), isTrue);
-      expect(driftColumnNames.contains('before_freq_hz'), isTrue);
-      expect(driftColumnNames.contains('after_midi'), isTrue);
-      expect(driftColumnNames.contains('after_cents'), isTrue);
-      expect(driftColumnNames.contains('after_freq_hz'), isTrue);
-      expect(driftColumnNames.contains('audio_snippet_uri'), isTrue);
-
-      final sessionColumns = await db.rawQuery('PRAGMA table_info(sessions)');
-      final sessionColumnNames =
-          sessionColumns.map((row) => row['name'] as String).toSet();
-      expect(sessionColumnNames.contains('stability_cents'), isTrue);
-      expect(sessionColumnNames.contains('lock_ratio'), isTrue);
-
-      final attemptIndexes = await db.rawQuery('PRAGMA index_list(attempts)');
-      expect(
-        attemptIndexes.any((row) => row['name'] == 'idx_attempts_lookup'),
-        isTrue,
-      );
-
-      final masteryIndexes = await db.rawQuery(
-        'PRAGMA index_list(mastery_history)',
-      );
-      expect(
-        masteryIndexes.any((row) => row['name'] == 'idx_mastery_lookup'),
-        isTrue,
-      );
-
-      await db.close();
-    }
   });
+
+  test('upgrade from old version drops and recreates tables with v6 schema',
+      () async {
+    final dbPath = p.join(tempDir.path, 'old_version.db');
+
+    // Simulate an old database at version 5 with the old schema.
+    final oldDb = await openDatabase(dbPath, version: 5, onCreate: (db, _) async {
+      await db.execute('''
+        CREATE TABLE sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          exercise_id TEXT NOT NULL,
+          mode_label TEXT NOT NULL,
+          started_at_ms INTEGER NOT NULL,
+          ended_at_ms INTEGER NOT NULL,
+          avg_error_cents REAL NOT NULL,
+          stability_score REAL NOT NULL,
+          drift_count INTEGER NOT NULL
+        )
+      ''');
+      await db.insert('sessions', {
+        'exercise_id': 'ex1',
+        'mode_label': 'relative',
+        'started_at_ms': 0,
+        'ended_at_ms': 1000,
+        'avg_error_cents': 10.0,
+        'stability_score': 90.0,
+        'drift_count': 0,
+      });
+    });
+    await oldDb.close();
+
+    // Opening with the repository should trigger onUpgrade → drop + recreate.
+    final repository = SessionRepository.forTesting(databasePathOverride: dbPath);
+    await repository.recentSessions(limit: 1);
+    await repository.close();
+
+    final db = await openDatabase(dbPath);
+    final versionRows = await db.rawQuery('PRAGMA user_version');
+    expect((versionRows.first['user_version'] as num).toInt(), 6);
+
+    final sessionColumns = await db.rawQuery('PRAGMA table_info(sessions)');
+    final sessionColumnNames =
+        sessionColumns.map((row) => row['name'] as String).toSet();
+    expect(sessionColumnNames.contains('stability_cents'), isTrue);
+    expect(sessionColumnNames.contains('lock_ratio'), isTrue);
+    expect(sessionColumnNames.contains('stability_score'), isFalse);
+
+    // Old data should be gone (no backward compat).
+    final rows = await db.query('sessions');
+    expect(rows, isEmpty);
+
+    await db.close();
+  });
+
   test('computes mode-level percentiles from sorted values per group',
       () async {
     final dbPath = p.join(tempDir.path, 'percentiles.db');

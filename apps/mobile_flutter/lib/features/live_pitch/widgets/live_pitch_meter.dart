@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
-class LivePitchMeter extends StatelessWidget {
+class LivePitchMeter extends StatefulWidget {
   const LivePitchMeter({
     super.key,
     required this.state,
@@ -12,16 +12,26 @@ class LivePitchMeter extends StatelessWidget {
   final ValueChanged<double> onWidthMeasured;
 
   @override
+  State<LivePitchMeter> createState() => _LivePitchMeterState();
+}
+
+class _LivePitchMeterState extends State<LivePitchMeter> {
+  double _lastReportedWidth = 0;
+
+  @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          onWidthMeasured(width);
-        });
+        if (constraints.hasBoundedWidth && width.isFinite && width > 0 && width != _lastReportedWidth) {
+          _lastReportedWidth = width;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onWidthMeasured(width);
+          });
+        }
         final alignmentX = width <= 0
             ? 0.0
-            : (state.xOffsetPx / width).clamp(-1.0, 1.0).toDouble();
+            : (widget.state.xOffsetPx / width).clamp(-1.0, 1.0).toDouble();
 
         return SizedBox(
           height: 24,
@@ -41,7 +51,7 @@ class LivePitchMeter extends StatelessWidget {
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: state.haloIntensity > 0.3
+                    color: widget.state.haloIntensity > 0.3
                         ? Colors.greenAccent
                         : Colors.orangeAccent,
                     shape: BoxShape.circle,
