@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitch_translator/audio/native_audio_bridge.dart';
+import 'package:pitch_translator/core/errors.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -29,17 +30,17 @@ void main() {
     );
 
     test(
-      'throws StateError when fallback disabled and native plugin is unavailable',
+      'throws AudioBridgeException(pluginUnavailable) when fallback disabled and native plugin is unavailable',
       () async {
         final bridge = NativeAudioBridge(enableSimulationFallback: false);
 
         await expectLater(
           bridge.start(),
           throwsA(
-            isA<StateError>().having(
-              (e) => e.message,
-              'message',
-              contains('simulation fallback is disabled'),
+            isA<AudioBridgeException>().having(
+              (e) => e.failure,
+              'failure',
+              AudioBridgeFailure.pluginUnavailable,
             ),
           ),
         );
