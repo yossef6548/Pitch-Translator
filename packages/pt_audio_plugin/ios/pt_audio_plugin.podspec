@@ -16,11 +16,10 @@ Pod::Spec.new do |s|
     '../../../dsp/src/**/*.{c,cc,cpp,h,hpp}'
   ]
 
-  s.public_header_files = 'Sources/PitchTranslatorDSPBridge.h'
-  s.header_mappings_dir = '../../../dsp/include'
+  s.module_map = 'module.modulemap'
   s.pod_target_xcconfig = {
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
-    'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/../../../dsp/include'
+    'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/../../../dsp/include $(PODS_TARGET_SRCROOT)/Sources'
   }
 
   s.frameworks = 'AVFoundation'
