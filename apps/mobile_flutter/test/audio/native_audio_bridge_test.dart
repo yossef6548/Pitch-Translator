@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitch_translator/audio/native_audio_bridge.dart';
-import 'package:pitch_translator/core/errors.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -30,17 +29,17 @@ void main() {
     );
 
     test(
-      'throws when fallback disabled and native plugin is unavailable',
+      'throws StateError when fallback disabled and native plugin is unavailable',
       () async {
         final bridge = NativeAudioBridge(enableSimulationFallback: false);
 
         await expectLater(
           bridge.start(),
           throwsA(
-            isA<AudioBridgeException>().having(
-              (e) => e.failure,
-              'failure',
-              AudioBridgeFailure.pluginUnavailable,
+            isA<StateError>().having(
+              (e) => e.message,
+              'message',
+              contains('simulation fallback is disabled'),
             ),
           ),
         );
@@ -71,6 +70,7 @@ void main() {
         enableSimulationFallback: false,
       );
 
+      await bridge.start();
       await expectLater(bridge.frames().first, throwsA(isA<FormatException>()));
     });
 
@@ -106,6 +106,7 @@ void main() {
           enableSimulationFallback: false,
         );
 
+        await bridge.start();
         final frame = await bridge.frames().first;
         expect(frame.freqHz, isNull);
         expect(frame.midiFloat, isNull);
@@ -115,7 +116,7 @@ void main() {
         expect(frame.hasUsablePitch, isFalse);
       },
     );
-    test('_frameFromEvent rejects non-Map payloads with descriptive error', () {
+    test('_frameFromEvent rejects non-Map payloads with descriptive error', () async {
       // Use a bridge with a mock EventChannel that emits a non-Map event.
       const channel = EventChannel('pt/audio/frames/test');
 
@@ -138,8 +139,11 @@ void main() {
         enableSimulationFallback: false,
       );
 
-      expectLater(
-        bridge.frames().first,
+      await expectLater(
+        () async {
+          await bridge.start();
+          return bridge.frames().first;
+        }(),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
