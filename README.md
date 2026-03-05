@@ -1,5 +1,34 @@
 # Pitch Translator
 
+## March 2026 audit notes (spec parity + CI failures)
+
+Latest repository audit pass checked implementation parity against the `specs/` documents and reran the same Flutter/DSP commands as CI.
+
+### What was not fully implemented (and is now fixed)
+
+- Home screen Live Pitch subtitle copy did not match the intended quick-start wording used by existing app tests.
+- Live Pitch navigation entered Exercise Select, but the target screen title did not include “Live Pitch,” causing navigation assertions to fail.
+- `SessionRepository` assumed sqflite globals were pre-initialized; in widget-test environments this caused `databaseFactory not initialized` failures.
+
+### CI failure root cause from this audit
+
+Three Flutter tests failed for one shared reason chain:
+
+1. Live Pitch tile opened Exercise Select.
+2. Exercise Select immediately loaded progress from SQLite.
+3. sqflite global factory/path were not initialized under widget-test runtime.
+4. Async route exception prevented expected “Live Pitch” assertions.
+
+Fixes in this pass:
+
+- Added resilient database factory/path resolution with sqflite FFI fallback for non-mobile test runtimes.
+- Updated Home subtitle and Live Pitch route destination title for consistency with quick-start flow expectations.
+
+### Android emulator status
+
+Container verification confirmed Flutter is installed, but Android SDK/AVD tooling is absent (`flutter emulators` reported no emulator sources; `flutter doctor -v` reported missing Android SDK). Emulator test execution therefore requires SDK + AVD provisioning in the target environment.
+
+
 ## Current implementation update (latest pass)
 
 - Native audio lifecycle is now explicit: no Dart-side frame subscription can auto-start native audio; `start()` is required before `frames()`.

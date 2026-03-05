@@ -33,7 +33,7 @@ class _ExerciseSelectScreenState extends State<ExerciseSelectScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Select Exercise')),
+      appBar: AppBar(title: const Text('Live Pitch')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -68,14 +68,15 @@ class _ExerciseSelectScreenState extends State<ExerciseSelectScreen> {
                 Text(mode.name, style: Theme.of(context).textTheme.titleMedium),
                 ...modeExercises.map((exercise) {
                   final unlocked = modeUnlocked &&
-                      ExerciseCatalog.levelUnlocked(_snapshot, _selectedLevel) &&
+                      ExerciseCatalog.levelUnlocked(
+                          _snapshot, _selectedLevel) &&
                       exercise.unlockRule(_snapshot, _selectedLevel);
-                  final lockedReason = !ExerciseCatalog.levelUnlocked(
-                          _snapshot, _selectedLevel)
-                      ? 'Locked: complete prior level mastery requirements.'
-                      : !modeUnlocked
-                          ? 'Locked: master previous mode at this level.'
-                          : 'Locked: complete prerequisite exercise chain.';
+                  final lockedReason =
+                      !ExerciseCatalog.levelUnlocked(_snapshot, _selectedLevel)
+                          ? 'Locked: complete prior level mastery requirements.'
+                          : !modeUnlocked
+                              ? 'Locked: master previous mode at this level.'
+                              : 'Locked: complete prerequisite exercise chain.';
                   return ListTile(
                     title: Text('${exercise.id} • ${exercise.name}'),
                     subtitle: Text(unlocked ? 'Unlocked' : lockedReason),

@@ -60,9 +60,10 @@ class _HomeScreen extends StatelessWidget {
         children: [
           ListTile(
             title: const Text('Live Pitch'),
-            subtitle: const Text('Select exercise + level to start session'),
+            subtitle: const Text('Open live audio feedback session'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).pushNamed(AppRoutes.exerciseSelect),
+            onTap: () =>
+                Navigator.of(context).pushNamed(AppRoutes.exerciseSelect),
           ),
           ListTile(
             title: const Text('History'),

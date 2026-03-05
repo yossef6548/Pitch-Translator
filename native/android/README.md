@@ -56,3 +56,23 @@ Android quality gates are automated in `.github/workflows/ci.yml`:
 2. Build Flutter debug APK from `apps/mobile_flutter`.
 
 This ensures native bridge sources continue compiling and the app can assemble in CI before merge.
+
+
+## Emulator verification notes
+
+This repository can be built/tested for Android in CI, but running the Flutter app on an emulator additionally requires a local Android SDK + AVD image.
+
+Minimum commands (Linux example):
+
+```bash
+# after installing Android cmdline-tools and setting ANDROID_SDK_ROOT
+sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64"
+avdmanager create avd -n pt_api35 -k "system-images;android-35;google_apis;x86_64"
+emulator -avd pt_api35 -no-audio -no-snapshot
+
+cd apps/mobile_flutter
+flutter run -d emulator-5554
+```
+
+If `flutter emulators` reports no sources or `flutter doctor` reports missing Android SDK, install/provision the SDK first, then re-run.
