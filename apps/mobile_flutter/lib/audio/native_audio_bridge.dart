@@ -127,6 +127,12 @@ class NativeAudioBridge {
       _startedSuccessfully = false;
       _isRunning = false;
       rethrow;
+    } on StateError catch (_) {
+      // Do not wrap this error. Release builds must fail loudly if simulation is attempted.
+      _usingSimulation = false;
+      _startedSuccessfully = false;
+      _isRunning = false;
+      rethrow;
     } catch (error) {
       _usingSimulation = false;
       _startedSuccessfully = false;

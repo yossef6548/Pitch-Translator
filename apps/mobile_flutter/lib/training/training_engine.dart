@@ -65,15 +65,21 @@ class TrainingEngine {
 
     if (state.id == LivePitchStateId.lowConfidence) {
       if (!_canRecoverFromLowConfidence(frame)) {
-        state = _computeVisuals(frame, LivePitchStateId.lowConfidence,
-            effectiveError: null);
+        state = _computeVisuals(
+          frame,
+          LivePitchStateId.lowConfidence,
+          effectiveError: null,
+        );
         return;
       }
       state = state.copyWith(id: _returnStateAfterOverride);
     } else if (_isLowConfidence(frame)) {
       _returnStateAfterOverride = state.id;
-      state = _computeVisuals(frame, LivePitchStateId.lowConfidence,
-          effectiveError: null);
+      state = _computeVisuals(
+        frame,
+        LivePitchStateId.lowConfidence,
+        effectiveError: null,
+      );
       return;
     }
 
@@ -227,30 +233,18 @@ class TrainingEngine {
     LivePitchStateId next, {
     required double? effectiveError,
   }) {
-    if (next == LivePitchStateId.lowConfidence) {
-      return state.copyWith(
-        id: next,
-        currentMidi: LivePitchUiState.setValue(frame.nearestMidi),
-        centsError: LivePitchUiState.setValue<double>(null),
-        effectiveError: LivePitchUiState.setValue<double>(null),
-        absError: 0,
-        errorFactorE: 0,
-        directionD: 0,
-        xOffsetPx: 0,
-        deformPx: 0,
-        saturation: PtConstants.lowConfidenceSaturation,
-        haloIntensity: 0,
-        errorReadoutVisible: false,
-        displayCents: '—',
-        arrow: '',
-      );
-    }
-
-    final centsError = frame.centsError!
-        .clamp(-PtConstants.centsErrorClamp, PtConstants.centsErrorClamp);
-    final absError = effectiveError!.abs();
+    final centsErrorRaw = frame.centsError;
+    final centsError = centsErrorRaw == null
+        ? null
+        : centsErrorRaw.clamp(
+            -PtConstants.centsErrorClamp,
+            PtConstants.centsErrorClamp,
+          );
+    final absError = effectiveError?.abs() ?? 0;
     final e = (absError / _config.driftThresholdCents).clamp(0.0, 1.0);
-    final d = centsError == 0 ? 0 : (centsError > 0 ? 1 : -1);
+    final d = centsError == null || centsError == 0
+        ? 0
+        : (centsError > 0 ? 1 : -1);
     final binding = bindDspToUi(
       frame: frame,
       effectiveError: effectiveError,
@@ -261,8 +255,8 @@ class TrainingEngine {
     return state.copyWith(
       id: next,
       currentMidi: LivePitchUiState.setValue(frame.nearestMidi),
-      centsError: LivePitchUiState.setValue(centsError),
-      effectiveError: LivePitchUiState.setValue(effectiveError),
+      centsError: LivePitchUiState.setValue<double>(centsError),
+      effectiveError: LivePitchUiState.setValue<double>(effectiveError),
       absError: absError,
       errorFactorE: e,
       directionD: d,

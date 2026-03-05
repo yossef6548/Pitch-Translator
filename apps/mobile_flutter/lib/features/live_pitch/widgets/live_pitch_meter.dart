@@ -22,6 +22,8 @@ class _LivePitchMeterState extends State<LivePitchMeter> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        // The full width of the meter represents exactly one semitone.
+        // Therefore semitoneWidthPxW == widget width.
         final width = constraints.maxWidth;
         if (constraints.hasBoundedWidth && width.isFinite && width > 0 && width != _lastReportedWidth) {
           _lastReportedWidth = width;
@@ -29,9 +31,6 @@ class _LivePitchMeterState extends State<LivePitchMeter> {
             widget.onWidthMeasured(width);
           });
         }
-        final alignmentX = width <= 0
-            ? 0.0
-            : (widget.state.xOffsetPx / width).clamp(-1.0, 1.0).toDouble();
 
         return SizedBox(
           height: 24,
@@ -46,15 +45,18 @@ class _LivePitchMeterState extends State<LivePitchMeter> {
                 child: Container(width: 2, height: 20, color: Colors.white70),
               ),
               Align(
-                alignment: Alignment(alignmentX, 0),
-                child: Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: widget.state.haloIntensity > 0.3
-                        ? Colors.greenAccent
-                        : Colors.orangeAccent,
-                    shape: BoxShape.circle,
+                alignment: Alignment.center,
+                child: Transform.translate(
+                  offset: Offset(widget.state.xOffsetPx, 0),
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: widget.state.haloIntensity > 0.3
+                          ? Colors.greenAccent
+                          : Colors.orangeAccent,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
               ),

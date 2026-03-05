@@ -30,7 +30,7 @@ void main() {
     );
 
     test(
-      'throws when fallback disabled and native plugin is unavailable',
+      'throws AudioBridgeException(pluginUnavailable) when fallback disabled and native plugin is unavailable',
       () async {
         final bridge = NativeAudioBridge(enableSimulationFallback: false);
 
@@ -71,6 +71,7 @@ void main() {
         enableSimulationFallback: false,
       );
 
+      await bridge.start();
       await expectLater(bridge.frames().first, throwsA(isA<FormatException>()));
     });
 
@@ -106,6 +107,7 @@ void main() {
           enableSimulationFallback: false,
         );
 
+        await bridge.start();
         final frame = await bridge.frames().first;
         expect(frame.freqHz, isNull);
         expect(frame.midiFloat, isNull);
@@ -115,7 +117,7 @@ void main() {
         expect(frame.hasUsablePitch, isFalse);
       },
     );
-    test('_frameFromEvent rejects non-Map payloads with descriptive error', () {
+    test('_frameFromEvent rejects non-Map payloads with descriptive error', () async {
       // Use a bridge with a mock EventChannel that emits a non-Map event.
       const channel = EventChannel('pt/audio/frames/test');
 
@@ -138,8 +140,11 @@ void main() {
         enableSimulationFallback: false,
       );
 
-      expectLater(
-        bridge.frames().first,
+      await expectLater(
+        () async {
+          await bridge.start();
+          return bridge.frames().first;
+        }(),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
