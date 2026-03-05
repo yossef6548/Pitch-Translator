@@ -212,21 +212,34 @@ public final class PitchTranslatorAudioPlugin: NSObject, FlutterPlugin, FlutterS
       return
     }
 
+    // Build the payload with an explicit type annotation before dispatching to
+    // the emit queue. This avoids Swift type-checker ambiguity on the complex
+    // nested dictionary literal with heterogeneous value types.
+    let freqHz: Any = frame.freq_hz.isFinite ? frame.freq_hz as Any : NSNull()
+    let midiFloat: Any = frame.midi_float.isFinite ? frame.midi_float as Any : NSNull()
+    let nearestMidi: Any = frame.nearest_midi >= 0 ? Int(frame.nearest_midi) as Any : NSNull()
+    let centsError: Any = frame.cents_error.isFinite ? frame.cents_error as Any : NSNull()
+    let confidence = min(1.0, max(0.0, frame.confidence.isFinite ? frame.confidence : 0.0))
+    let vibratoRateHz: Any = frame.vibrato_rate_hz.isFinite ? frame.vibrato_rate_hz as Any : NSNull()
+    let vibratoDepthCents: Any = frame.vibrato_depth_cents.isFinite ? frame.vibrato_depth_cents as Any : NSNull()
+    let vibrato: [String: Any] = [
+      "detected": frame.vibrato_detected,
+      "rate_hz": vibratoRateHz,
+      "depth_cents": vibratoDepthCents,
+    ]
+    let payload: [String: Any] = [
+      "timestamp_ms": timestampMs,
+      "freq_hz": freqHz,
+      "midi_float": midiFloat,
+      "nearest_midi": nearestMidi,
+      "cents_error": centsError,
+      "confidence": confidence,
+      "vibrato": vibrato,
+    ]
+
     emitQueue.async { [weak self] in
       guard self?.isRunning == true else { return }
-      sink([
-        "timestamp_ms": timestampMs,
-        "freq_hz": frame.freq_hz.isFinite ? frame.freq_hz : NSNull(),
-        "midi_float": frame.midi_float.isFinite ? frame.midi_float : NSNull(),
-        "nearest_midi": frame.nearest_midi >= 0 ? frame.nearest_midi : NSNull(),
-        "cents_error": frame.cents_error.isFinite ? frame.cents_error : NSNull(),
-        "confidence": min(1.0, max(0.0, frame.confidence.isFinite ? frame.confidence : 0.0)),
-        "vibrato": [
-          "detected": frame.vibrato_detected,
-          "rate_hz": frame.vibrato_rate_hz.isFinite ? frame.vibrato_rate_hz : NSNull(),
-          "depth_cents": frame.vibrato_depth_cents.isFinite ? frame.vibrato_depth_cents : NSNull(),
-        ],
-      ])
+      sink(payload)
     }
   }
 
