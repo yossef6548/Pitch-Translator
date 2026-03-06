@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../analytics/session_repository.dart';
+import '../../app/dependencies.dart';
 import '../../app/router.dart';
 import '../../exercises/exercise_catalog.dart';
 
@@ -12,7 +12,6 @@ class ExerciseSelectScreen extends StatefulWidget {
 }
 
 class _ExerciseSelectScreenState extends State<ExerciseSelectScreen> {
-  final SessionRepository _sessionRepository = SessionRepository.instance;
   ProgressSnapshot _snapshot = const ProgressSnapshot();
   LevelId _selectedLevel = LevelId.l1;
 
@@ -23,10 +22,10 @@ class _ExerciseSelectScreenState extends State<ExerciseSelectScreen> {
   }
 
   Future<void> _loadProgress() async {
-    final mastered = await _sessionRepository.masteredExerciseLevelKeys();
+    final snapshot = await AppDependencies.loadUnlockedExercisesUseCase.loadSnapshot();
     if (!mounted) return;
     setState(() {
-      _snapshot = ProgressSnapshot(mastered: mastered);
+      _snapshot = snapshot;
     });
   }
 

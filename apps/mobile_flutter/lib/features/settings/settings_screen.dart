@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import '../../app/dependencies.dart';
 import 'log_export_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -11,8 +10,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  static const _numericOverlayKey = 'settings.numeric_overlay';
-
   bool _showNumericOverlay = true;
 
   @override
@@ -22,16 +19,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final value = await AppDependencies.loadSettingsUseCase.executeShowNumericOverlay();
     if (!mounted) return;
     setState(() {
-      _showNumericOverlay = prefs.getBool(_numericOverlayKey) ?? true;
+      _showNumericOverlay = value;
     });
   }
 
   Future<void> _setNumericOverlay(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_numericOverlayKey, value);
+    await AppDependencies.saveSettingsUseCase.executeShowNumericOverlay(value);
     if (!mounted) return;
     setState(() => _showNumericOverlay = value);
   }
