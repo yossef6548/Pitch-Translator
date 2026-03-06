@@ -40,8 +40,11 @@ class LiveSessionCoordinator {
   LiveSessionState get state => _state;
 
   StreamSubscription<DspFrame>? _frameSubscription;
+  Timer? _firstFrameTimer;
+  bool _firstFrameReceived = false;
   final List<double> _absErrors = <double>[];
   final List<double> _effectiveErrors = <double>[];
+  final List<DriftEventWrite> _driftEvents = <DriftEventWrite>[];
   int _activeDurationMs = 0;
   int _lockedDurationMs = 0;
   int? _lastFrameAtMs;
@@ -64,12 +67,42 @@ class LiveSessionCoordinator {
 
     _resetMetrics();
     await _bridge.start();
-    _frameSubscription = _bridge.frames().listen(_onFrame);
+    _frameSubscription = _bridge.frames().listen((frame) {
+      if (!_firstFrameReceived) {
+        _firstFrameReceived = true;
+        _firstFrameTimer?.cancel();
+        _firstFrameTimer = null;
+      }
+      _onFrame(frame);
+    });
     _engine.onIntent(TrainingIntent.start);
     _emit(LiveSessionState(stage: LiveSessionStage.running, uiState: _engine.state));
+
+    // Health check: if no frame arrives within the timeout, stop capture and
+    // report noInputDetected so the UI can surface an actionable error.
+    _firstFrameTimer = Timer(_bridge.firstFrameTimeout, () {
+      // Guard: if stop/pause was called concurrently, _firstFrameTimer will
+      // have been cancelled and nulled already; double-check stage to be safe.
+      if (_state.stage != LiveSessionStage.running) return;
+      _firstFrameTimer = null;
+      _bridge.stop().then((_) async {
+        await _frameSubscription?.cancel();
+        _frameSubscription = null;
+        _engine.onIntent(TrainingIntent.stop);
+        _emit(const LiveSessionState(
+          stage: LiveSessionStage.completed,
+          failure: LiveSessionFailure.noInputDetected,
+          errorMessage: 'No audio input detected. Check your microphone and try again.',
+        ));
+      }, onError: (Object error) {
+        AppLogger.error('Failed to stop bridge during no-input timeout', error);
+      });
+    });
   }
 
   Future<void> pause() async {
+    _firstFrameTimer?.cancel();
+    _firstFrameTimer = null;
     await _bridge.stop();
     await _frameSubscription?.cancel();
     _frameSubscription = null;
@@ -93,35 +126,70 @@ class LiveSessionCoordinator {
   }
 
   Future<void> stop() async {
+    _firstFrameTimer?.cancel();
+    _firstFrameTimer = null;
     await _bridge.stop();
     await _frameSubscription?.cancel();
     _frameSubscription = null;
     _engine.onIntent(TrainingIntent.stop);
 
+    final metrics = _buildMetrics();
+    final endedAtMs = DateTime.now().millisecondsSinceEpoch;
+    final startedAtMs = endedAtMs - _activeDurationMs;
+
     try {
-      await _sessionRepository.recordSession(
+      final sessionId = await _sessionRepository.recordSession(
         exerciseId: exercise.id,
         modeLabel: exercise.mode.name,
-        startedAtMs: DateTime.now().millisecondsSinceEpoch - _activeDurationMs,
-        endedAtMs: DateTime.now().millisecondsSinceEpoch,
-        avgErrorCents: _buildMetrics().avgErrorCents,
-        stabilityCents: _buildMetrics().stabilityCents,
-        lockRatio: _buildMetrics().lockRatio,
-        driftCount: _buildMetrics().driftCount,
+        startedAtMs: startedAtMs,
+        endedAtMs: endedAtMs,
+        avgErrorCents: metrics.avgErrorCents,
+        stabilityCents: metrics.stabilityCents,
+        lockRatio: metrics.lockRatio,
+        driftCount: metrics.driftCount,
       );
+
+      await _sessionRepository.recordAttempt(
+        sessionId: sessionId,
+        exerciseId: exercise.id,
+        levelId: level.name,
+        assisted: false,
+        success: metrics.lockRatio > 0,
+        avgErrorCents: metrics.avgErrorCents,
+      );
+
+      if (_driftEvents.isNotEmpty) {
+        await _sessionRepository.recordDriftEvents(
+          sessionId: sessionId,
+          events: _driftEvents,
+        );
+      }
     } catch (error) {
       AppLogger.error('Session persistence failure', error);
+      _emit(LiveSessionState(
+        stage: LiveSessionStage.completed,
+        uiState: _engine.state,
+        metrics: metrics,
+        failure: LiveSessionFailure.persistenceFailed,
+        errorMessage: 'Failed to persist session data.',
+      ));
       throw SessionPersistenceError('Failed to persist session: $error');
     }
 
     _emit(LiveSessionState(
       stage: LiveSessionStage.completed,
       uiState: _engine.state,
-      metrics: _buildMetrics(),
+      metrics: metrics,
     ));
   }
 
+  void setSemitoneWidthPxW(double width) {
+    _engine.setSemitoneWidthPxW(width);
+  }
+
   Future<void> dispose() async {
+    _firstFrameTimer?.cancel();
+    _firstFrameTimer = null;
     await _frameSubscription?.cancel();
     await _bridge.stop();
     await _bridge.dispose();
@@ -129,7 +197,26 @@ class LiveSessionCoordinator {
   }
 
   void _onFrame(DspFrame frame) {
+    final prevDriftCount = _engine.confirmedDriftCount;
     _engine.onDspFrame(frame);
+
+    // Accumulate newly-confirmed drift events for later persistence.
+    if (_engine.confirmedDriftCount > prevDriftCount) {
+      final event = _engine.lastDriftEvent;
+      if (event != null) {
+        _driftEvents.add(DriftEventWrite(
+          eventIndex: _driftEvents.length,
+          confirmedAtMs: frame.timestampMs,
+          beforeMidi: event.beforeMidi,
+          beforeCents: event.beforeCents,
+          beforeFreqHz: event.before.freqHz,
+          afterMidi: event.afterMidi,
+          afterCents: event.afterCents,
+          afterFreqHz: event.after.freqHz,
+        ));
+      }
+    }
+
     if (_lastFrameAtMs != null) {
       final delta = math.max(0, frame.timestampMs - _lastFrameAtMs!);
       _activeDurationMs += delta;
@@ -164,7 +251,7 @@ class LiveSessionCoordinator {
       avgErrorCents: avgError,
       stabilityCents: stability,
       lockRatio: lockRatio,
-      driftCount: _engine.lastDriftEvent == null ? 0 : 1,
+      driftCount: _engine.confirmedDriftCount,
       activeDurationMs: _activeDurationMs,
     );
   }
@@ -181,6 +268,10 @@ class LiveSessionCoordinator {
   void _resetMetrics() {
     _absErrors.clear();
     _effectiveErrors.clear();
+    _driftEvents.clear();
+    _firstFrameReceived = false;
+    _firstFrameTimer?.cancel();
+    _firstFrameTimer = null;
     _activeDurationMs = 0;
     _lockedDurationMs = 0;
     _lastFrameAtMs = null;

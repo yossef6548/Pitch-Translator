@@ -6,10 +6,17 @@ cd "$ROOT_DIR"
 
 fail=0
 
+PRESENTATION_DIR="apps/mobile_flutter/lib/features"
+
 check_forbidden_imports() {
   local pattern="$1"
   local label="$2"
-  if rg -n "$pattern" apps/mobile_flutter/lib/presentation; then
+  if [[ ! -d "$PRESENTATION_DIR" ]]; then
+    echo "[FAIL] presentation layer directory '$PRESENTATION_DIR' does not exist — guard cannot run"
+    fail=1
+    return
+  fi
+  if rg -n "$pattern" "$PRESENTATION_DIR"; then
     echo "[FAIL] presentation layer imports forbidden dependency: $label"
     fail=1
   fi

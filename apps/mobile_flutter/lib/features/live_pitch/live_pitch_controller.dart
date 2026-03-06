@@ -42,7 +42,9 @@ class LivePitchController extends ChangeNotifier {
   Future<void> resume() => _coordinator.resume();
   Future<void> stopSession() => _coordinator.stop();
 
-  void setSemitoneWidthPxW(double width) {}
+  void setSemitoneWidthPxW(double width) {
+    _coordinator.setSemitoneWidthPxW(width);
+  }
 
   Future<void> handleAudioInterruption() async {
     await stopSession();
