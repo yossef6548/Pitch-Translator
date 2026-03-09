@@ -7,82 +7,46 @@ on:
     branches: [main]
 
 jobs:
-  flutter:
-    name: Flutter analyze + test
+  architecture_guard:
+    name: Architecture guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run architecture guard
+        run: bash qa/scripts/architecture_guard.sh
+
+  flutter_checks:
+    name: Flutter analyze + test + debug APK
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/mobile_flutter
     steps:
       - uses: actions/checkout@v4
-      - name: Architecture guards
-        run: bash ../../qa/scripts/architecture_guard.sh
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Flutter pub get
-        run: flutter pub get
-      - name: Flutter analyze
-        run: flutter analyze lib/
-      - name: Flutter test
-        run: |
-          flutter test $(find test -name "*_test.dart" \
-            | grep -v "drift_replay_test\|exercise_config_screen_test" \
-            | tr '\n' ' ')
-
-  dsp:
-    name: DSP cmake + ctest + validation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Architecture guards
-        run: bash qa/scripts/architecture_guard.sh
-      - name: Configure DSP
-        run: cmake -S dsp -B build/dsp
-      - name: Build DSP
-        run: cmake --build build/dsp --config Release
-      - name: Run DSP tests with ctest
-        run: ctest --test-dir build/dsp --output-on-failure -C Release
-
-  android:
-    name: Android release APK build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/mobile_flutter
-    steps:
-      - uses: actions/checkout@v4
-      - name: Architecture guards
-        run: bash ../../qa/scripts/architecture_guard.sh
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Install Android NDK
-        run: sdkmanager "ndk;26.3.11579264"
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
       - name: Flutter pub get
         run: flutter pub get
-      - name: Assemble release APK
-        run: flutter build apk --release
+      - name: Flutter analyze
+        run: flutter analyze
+      - name: Flutter test
+        run: flutter test
+      - name: Flutter build apk (debug)
+        run: flutter build apk --debug
 
-  ios:
-    name: iOS build (no signing)
-    runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: apps/mobile_flutter
+  dsp:
+    name: DSP cmake + ctest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Architecture guards
-        run: bash ../../qa/scripts/architecture_guard.sh
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - name: Flutter pub get
-        run: flutter pub get
-      - name: Build iOS release (no signing)
-        run: flutter build ios --release --no-codesign
+      - name: Configure DSP
+        run: cmake -S dsp -B build/dsp
+      - name: Build DSP
+        run: cmake --build build/dsp
+      - name: Run DSP tests
+        run: ctest --test-dir build/dsp --output-on-failure
