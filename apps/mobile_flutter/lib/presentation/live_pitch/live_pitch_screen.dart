@@ -215,7 +215,9 @@ class _FailureStateCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               TextButton(
-                onPressed: onOpenSettings,
+                onPressed: () {
+                  unawaited(onOpenSettings());
+                },
                 child: const Text('Open OS app settings'),
               ),
             ],

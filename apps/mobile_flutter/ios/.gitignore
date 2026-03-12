@@ -22,6 +22,8 @@ Flutter/ephemeral/
 Flutter/app.flx
 Flutter/app.zip
 Flutter/flutter_assets/
+Flutter/Generated.xcconfig
+Flutter/flutter_export_environment.sh
 ServiceDefinitions.json
 
 # Exceptions to above rules.
