@@ -60,7 +60,17 @@ cd "`dirname \"$PRG\"`/" >/dev/null
 APP_HOME="`pwd -P`"
 cd "$SAVED" >/dev/null
 
-CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+WRAPPER_JAR="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+if [ ! -f "$WRAPPER_JAR" ] ; then
+    if command -v gradle >/dev/null 2>&1 ; then
+        warn "gradle-wrapper.jar not found. Attempting to generate it using the installed Gradle..."
+        ( cd "$APP_HOME" && gradle wrapper ) || die "Failed to generate Gradle wrapper. Please run 'gradle wrapper' manually in $APP_HOME."
+    else
+        die "gradle-wrapper.jar not found and no 'gradle' command available.\nPlease install Gradle and run 'gradle wrapper' in $APP_HOME to generate the wrapper JAR."
+    fi
+fi
+
+CLASSPATH="$WRAPPER_JAR"
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then

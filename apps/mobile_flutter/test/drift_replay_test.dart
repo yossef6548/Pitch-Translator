@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitch_translator/analytics/session_repository.dart';
@@ -66,17 +63,8 @@ void main() {
   });
 
   group('DriftReplayScreen snippet frame loading', () {
-    late Directory tempDir;
-
     setUp(() async {
       SharedPreferences.setMockInitialValues({'onboarding_complete': true});
-      tempDir = await Directory.systemTemp.createTemp('pt_drift_replay_test');
-    });
-
-    tearDown(() async {
-      if (await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
-      }
     });
 
     testWidgets('shows unavailable message when audioSnippetUri is null',
@@ -114,31 +102,6 @@ void main() {
     testWidgets(
         'parses snake_case JSON fields and displays frame count and telemetry',
         (tester) async {
-      final snippetFile = File('${tempDir.path}/snippet_0.json');
-      snippetFile.writeAsStringSync(jsonEncode({
-        'sessionStartMs': 500,
-        'eventIndex': 0,
-        'frameCount': 2,
-        'frames': [
-          {
-            'timestamp_ms': 1000,
-            'freq_hz': 440.0,
-            'midi_float': 69.0,
-            'nearest_midi': 69,
-            'cents_error': 8.5,
-            'confidence': 0.95,
-          },
-          {
-            'timestamp_ms': 1100,
-            'freq_hz': 439.0,
-            'midi_float': 68.97,
-            'nearest_midi': 69,
-            'cents_error': -4.2,
-            'confidence': 0.91,
-          },
-        ],
-      }));
-
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(body: DriftReplayScreen()),
@@ -160,14 +123,6 @@ void main() {
 
     testWidgets('renders empty when frames list in JSON is empty',
         (tester) async {
-      final snippetFile = File('${tempDir.path}/snippet_empty.json');
-      snippetFile.writeAsStringSync(jsonEncode({
-        'sessionStartMs': 500,
-        'eventIndex': 0,
-        'frameCount': 0,
-        'frames': <dynamic>[],
-      }));
-
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(body: DriftReplayScreen()),
