@@ -1,5 +1,4 @@
 import 'exercise_catalog.dart';
-import 'progression_engine.dart';
 
 class MasteryEvaluator {
   const MasteryEvaluator();

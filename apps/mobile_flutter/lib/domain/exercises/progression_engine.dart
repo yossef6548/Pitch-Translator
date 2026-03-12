@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'exercise_catalog.dart';
-import 'mastery_evaluator.dart';
 
 class SessionMetrics {
   final double avgError;

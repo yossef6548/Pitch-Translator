@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../exercises/exercise_catalog.dart';
-import '../features/live_pitch/live_pitch_screen.dart';
+import '../domain/exercises/exercise_catalog.dart';
+import '../presentation/live_pitch/live_pitch_screen.dart';
 import 'shell.dart';
 
 class AppRoutes {

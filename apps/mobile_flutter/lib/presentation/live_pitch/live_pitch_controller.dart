@@ -1,13 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
 import '../../application/live_session/live_session_coordinator.dart';
 import '../../application/live_session/live_session_failure.dart';
 import '../../application/live_session/live_session_state.dart';
-import '../../exercises/exercise_catalog.dart';
+import '../../domain/exercises/exercise_catalog.dart';
 import 'live_pitch_view_model.dart';
 
 class LivePitchController extends ChangeNotifier {
@@ -51,7 +50,7 @@ class LivePitchController extends ChangeNotifier {
   }
 
   Future<bool> openPermissionSettings() {
-    return openAppSettings();
+    return _coordinator.openPermissionSettings();
   }
 
   void _onState(LiveSessionState state) {

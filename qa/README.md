@@ -110,9 +110,10 @@ Guidelines:
 
 ## CI alignment
 
-GitHub Actions now enforces these automated quality gates on PRs to `main` via `.github/workflows/ci.yml`:
+GitHub Actions enforces these automated quality gates on PRs to `main` via `.github/workflows/ci.yml`:
 
-- Flutter analyze + full test suite
-- DSP CMake build + `ctest` + `pt_dsp_voice_validation`
-- Android native CMake build + debug APK assembly
-- iOS no-signing build
+- Architecture guard (`qa/scripts/architecture_guard.sh`)
+- Flutter analyze + Flutter test
+- Android debug APK build + Android release APK build
+- DSP CMake configure/build/test
+- Explicit iOS coverage defer notice (Ubuntu lane only; macOS lane to be added later)

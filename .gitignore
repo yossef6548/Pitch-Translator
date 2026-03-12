@@ -4,3 +4,4 @@ dsp/_codeql_build_dir/
 
 # Generated DSP validation artifacts
 dsp/tests/samples/generated/
+

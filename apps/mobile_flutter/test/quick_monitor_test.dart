@@ -14,7 +14,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Live Pitch'), findsOneWidget);
-      expect(find.text('Open live audio feedback session'), findsOneWidget);
+      expect(find.text('Open quick live monitoring.'), findsOneWidget);
     });
 
     testWidgets('tap Live Pitch tile opens live pitch screen', (tester) async {

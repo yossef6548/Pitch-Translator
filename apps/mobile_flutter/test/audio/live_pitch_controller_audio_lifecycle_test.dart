@@ -1,8 +1,9 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pitch_translator/application/live_session/live_session_coordinator.dart';
 import 'package:pitch_translator/audio/native_audio_bridge.dart';
-import 'package:pitch_translator/exercises/exercise_catalog.dart';
-import 'package:pitch_translator/features/live_pitch/live_pitch_controller.dart';
+import 'package:pitch_translator/domain/exercises/exercise_catalog.dart';
+import 'package:pitch_translator/presentation/live_pitch/live_pitch_controller.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
 void main() {
@@ -21,14 +22,22 @@ void main() {
           return null;
         });
 
-    final controller = LivePitchController(
-      exercise: ExerciseCatalog.byId('PF_1'),
+    final exercise = ExerciseCatalog.byId('PF_1');
+    final coordinator = LiveSessionCoordinator(
+      exercise: exercise,
       level: LevelId.l1,
       config: const ExerciseConfig(),
       bridge: NativeAudioBridge(
         frameChannel: frameChannel,
         controlChannel: controlChannel,
       ),
+    );
+
+    final controller = LivePitchController(
+      exercise: exercise,
+      level: LevelId.l1,
+      config: const ExerciseConfig(),
+      coordinator: coordinator,
     );
 
     await controller.init();
