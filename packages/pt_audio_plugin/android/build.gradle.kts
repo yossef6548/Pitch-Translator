@@ -7,6 +7,15 @@ android {
   namespace = "com.pitchtranslator.audio"
   compileSdk = 34
 
+  compileOptions {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+  }
+
+  kotlinOptions {
+    jvmTarget = JavaVersion.VERSION_17.toString()
+  }
+
   defaultConfig {
     minSdk = 26
     externalNativeBuild {

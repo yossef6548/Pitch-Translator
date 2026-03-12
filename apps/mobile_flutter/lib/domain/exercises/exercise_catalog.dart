@@ -1,3 +1,13 @@
+export 'exercise_definition.dart';
+export 'level_defaults.dart';
+export 'level_id.dart';
+export 'mastery_thresholds.dart';
+export 'mode_id.dart';
+export 'progress_snapshot.dart';
+export 'unlock_rules.dart';
+export 'mastery_evaluator.dart';
+export 'progression_engine.dart';
+
 import 'exercise_definition.dart';
 import 'level_id.dart';
 import 'mode_id.dart';

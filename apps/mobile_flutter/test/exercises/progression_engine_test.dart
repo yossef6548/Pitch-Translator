@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pitch_translator/exercises/exercise_catalog.dart';
-import 'package:pitch_translator/exercises/progression_engine.dart';
+import 'package:pitch_translator/domain/exercises/exercise_catalog.dart';
 
 void main() {
   test('level defaults match spec values', () {

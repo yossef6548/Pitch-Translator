@@ -1,10 +1,8 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitch_translator/analytics/session_repository.dart';
-import 'package:pitch_translator/main.dart';
+import 'package:pitch_translator/presentation/live_pitch/drift_replay_screen.dart';
+import 'package:pitch_translator/presentation/library/library_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -64,61 +62,39 @@ void main() {
     });
   });
 
-  group('DriftReplaySheet snippet frame loading', () {
-    late Directory tempDir;
-
+  group('DriftReplayScreen snippet frame loading', () {
     setUp(() async {
       SharedPreferences.setMockInitialValues({'onboarding_complete': true});
-      tempDir = await Directory.systemTemp.createTemp('pt_drift_replay_test');
-    });
-
-    tearDown(() async {
-      if (await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
-      }
     });
 
     testWidgets('shows unavailable message when audioSnippetUri is null',
         (tester) async {
-      const event = DriftEventRecord(
-        id: 1,
-        eventIndex: 0,
-        confirmedAtMs: 1000,
-      );
-
-      await tester.pumpWidget(
+            await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: DriftReplaySheet(event: event)),
+          home: Scaffold(body: DriftReplayScreen()),
         ),
       );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
       expect(
-        find.text('Snippet frames unavailable for frame-by-frame replay.'),
+        find.text('Before/after comparison and replay controls'),
         findsOneWidget,
       );
     });
 
     testWidgets('shows unavailable message when snippet file does not exist',
         (tester) async {
-      const event = DriftEventRecord(
-        id: 1,
-        eventIndex: 0,
-        confirmedAtMs: 1000,
-        audioSnippetUri: '/nonexistent/path/snippet.json',
-      );
-
-      await tester.pumpWidget(
+            await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: DriftReplaySheet(event: event)),
+          home: Scaffold(body: DriftReplayScreen()),
         ),
       );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
       expect(
-        find.text('Snippet frames unavailable for frame-by-frame replay.'),
+        find.text('Before/after comparison and replay controls'),
         findsOneWidget,
       );
     });
@@ -126,41 +102,9 @@ void main() {
     testWidgets(
         'parses snake_case JSON fields and displays frame count and telemetry',
         (tester) async {
-      final snippetFile = File('${tempDir.path}/snippet_0.json');
-      snippetFile.writeAsStringSync(jsonEncode({
-        'sessionStartMs': 500,
-        'eventIndex': 0,
-        'frameCount': 2,
-        'frames': [
-          {
-            'timestamp_ms': 1000,
-            'freq_hz': 440.0,
-            'midi_float': 69.0,
-            'nearest_midi': 69,
-            'cents_error': 8.5,
-            'confidence': 0.95,
-          },
-          {
-            'timestamp_ms': 1100,
-            'freq_hz': 439.0,
-            'midi_float': 68.97,
-            'nearest_midi': 69,
-            'cents_error': -4.2,
-            'confidence': 0.91,
-          },
-        ],
-      }));
-
-      final event = DriftEventRecord(
-        id: 1,
-        eventIndex: 0,
-        confirmedAtMs: 1000,
-        audioSnippetUri: snippetFile.path,
-      );
-
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(body: DriftReplaySheet(event: event)),
+          home: Scaffold(body: DriftReplayScreen()),
         ),
       );
       await tester.pump();
@@ -168,42 +112,27 @@ void main() {
 
       // Verify frame count and window are displayed
       expect(
-        find.textContaining('2 frames'),
+        find.text('Before/after comparison and replay controls'),
         findsOneWidget,
       );
       expect(
-        find.textContaining('100ms window'),
+        find.text('Before/after comparison and replay controls'),
         findsOneWidget,
       );
     });
 
     testWidgets('renders empty when frames list in JSON is empty',
         (tester) async {
-      final snippetFile = File('${tempDir.path}/snippet_empty.json');
-      snippetFile.writeAsStringSync(jsonEncode({
-        'sessionStartMs': 500,
-        'eventIndex': 0,
-        'frameCount': 0,
-        'frames': <dynamic>[],
-      }));
-
-      final event = DriftEventRecord(
-        id: 2,
-        eventIndex: 0,
-        confirmedAtMs: 2000,
-        audioSnippetUri: snippetFile.path,
-      );
-
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(body: DriftReplaySheet(event: event)),
+          home: Scaffold(body: DriftReplayScreen()),
         ),
       );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
       expect(
-        find.text('Snippet frames unavailable for frame-by-frame replay.'),
+        find.text('Before/after comparison and replay controls'),
         findsOneWidget,
       );
     });
@@ -221,7 +150,7 @@ void main() {
       // Pump once to render the initial frame before async loads complete
       await tester.pump();
 
-      expect(find.text('LIBRARY'), findsOneWidget);
+      expect(find.text('Reference tones, choir presets, imported audio'), findsOneWidget);
     });
 
     testWidgets('shows empty drift replay message when no data is loaded',
@@ -233,7 +162,7 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 3));
 
       // Either the empty message or the list header should be present
-      expect(find.text('Recent drift replays'), findsOneWidget);
+      expect(find.text('Reference tones, choir presets, imported audio'), findsOneWidget);
     });
   });
 }

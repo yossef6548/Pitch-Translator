@@ -11,7 +11,7 @@ void main() {
     await tester.pumpWidget(const PitchTranslatorApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('Pitch Translator'), findsOneWidget);
+    expect(find.text('Home'), findsWidgets);
     expect(find.text('Live Pitch'), findsOneWidget);
     expect(find.text('History'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);

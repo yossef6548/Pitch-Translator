@@ -8,7 +8,7 @@ import '../../analytics/session_repository.dart';
 import '../../audio/native_audio_bridge.dart';
 import '../../core/errors.dart';
 import '../../core/logger.dart';
-import '../../exercises/exercise_catalog.dart';
+import '../../domain/exercises/exercise_catalog.dart';
 import '../../training/training_engine.dart';
 import 'live_session_failure.dart';
 import 'live_session_metrics.dart';
@@ -185,6 +185,10 @@ class LiveSessionCoordinator {
 
   void setSemitoneWidthPxW(double width) {
     _engine.setSemitoneWidthPxW(width);
+  }
+
+  Future<bool> openPermissionSettings() {
+    return openAppSettings();
   }
 
   Future<void> dispose() async {

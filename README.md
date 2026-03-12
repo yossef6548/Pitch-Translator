@@ -5,11 +5,18 @@ Pitch Translator is organized around a **single native plugin implementation pat
 ## Repository ownership model
 
 - `apps/mobile_flutter` → product Flutter app.
-- `apps/mobile_flutter/android` and `apps/mobile_flutter/ios` → committed Flutter host projects (tracked in-repo when generated in a Flutter-enabled environment).
+- `apps/mobile_flutter/android` and `apps/mobile_flutter/ios` → committed Flutter host projects.
 - `packages/pt_audio_plugin` → **only** Flutter native bridge/plugin implementation.
-- `packages/pt_contracts` → shared protocol/contracts/constants DTO surface only.
+- `packages/pt_contracts` → shared protocol/contracts/constants DTO surface.
 - `dsp` → portable C++ DSP.
-- `native/` → documentation, checklists, and release validation guidance only (no plugin source-of-truth).
+- `native/` → documentation/checklists only (no runtime plugin source-of-truth).
+
+## Platform foundation status
+
+- Android host project now includes Gradle wrapper scripts (`gradlew`, `gradlew.bat`) and wrapper properties. On environments where the wrapper JAR is not present (for example, on a clean checkout where it is not committed), install Gradle locally and run `gradle wrapper` from `apps/mobile_flutter/android` before invoking `./gradlew` so that the wrapper JAR is generated. The `gradlew` script will also attempt this bootstrap automatically if `gradle` is on the PATH.
+- Android Gradle memory defaults are set to CI/container-safe values in `apps/mobile_flutter/android/gradle.properties`.
+- iOS host project is committed in standard Flutter layout with `Podfile`, CocoaPods wiring, `Info.plist` microphone usage text, and Flutter support files.
+- iOS build validation is intentionally deferred in CI until a macOS runner/device lane is enabled.
 
 ## Where real plugin code lives
 
@@ -22,16 +29,21 @@ Any `native/android` and `native/ios` content is documentation/support material 
 
 ## Build and validation
 
-### Flutter app
+### Flutter app (Ubuntu)
 
 From `apps/mobile_flutter`:
 
 ```bash
 flutter pub get
+flutter analyze
 flutter test
-flutter build apk
-flutter build ios --no-codesign
+flutter build apk --debug
+flutter build apk --release
 ```
+
+### iOS build note
+
+`flutter build ios --no-codesign` is not run in Ubuntu CI. Keep this for a dedicated macOS lane.
 
 ### DSP
 
@@ -43,10 +55,10 @@ cmake --build build
 ctest --test-dir build
 ```
 
-### Architecture guards
+### Architecture guard
 
 ```bash
 bash qa/scripts/architecture_guard.sh
 ```
 
-This guard checks for forbidden presentation-layer imports and duplicate plugin channel strings outside approved paths.
+This guard checks presentation-layer boundaries, export-bypass attempts, duplicate plugin channel strings, and removal of legacy `lib/features` / `lib/exercises` paths.

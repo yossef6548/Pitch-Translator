@@ -1,7 +1,4 @@
 import '../../domain/exercises/exercise_catalog.dart';
-import '../../domain/exercises/exercise_definition.dart';
-import '../../domain/exercises/level_id.dart';
-import '../../domain/exercises/progress_snapshot.dart';
 import '../../domain/session/session_repository.dart';
 
 class LoadUnlockedExercisesUseCase {

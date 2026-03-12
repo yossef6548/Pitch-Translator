@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pitch_translator/exercises/exercise_catalog.dart';
-import 'package:pitch_translator/exercises/progression_engine.dart';
+import 'package:pitch_translator/domain/exercises/exercise_catalog.dart';
 import 'package:pitch_translator/training/mode_evaluators.dart';
 import 'package:pitch_translator/training/training_engine.dart';
 import 'package:pt_contracts/pt_contracts.dart';
