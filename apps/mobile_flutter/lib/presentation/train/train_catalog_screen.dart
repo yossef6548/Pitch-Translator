@@ -5,15 +5,28 @@ import '../../app/router.dart';
 import '../../domain/exercises/exercise_catalog.dart';
 import '../../domain/exercises/progress_snapshot.dart';
 
-class TrainCatalogScreen extends StatelessWidget {
+class TrainCatalogScreen extends StatefulWidget {
   const TrainCatalogScreen({super.key});
+
+  @override
+  State<TrainCatalogScreen> createState() => _TrainCatalogScreenState();
+}
+
+class _TrainCatalogScreenState extends State<TrainCatalogScreen> {
+  late Future<ProgressSnapshot> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _loadProgress();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Train')),
       body: FutureBuilder<ProgressSnapshot>(
-        future: _loadProgress(),
+        future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());

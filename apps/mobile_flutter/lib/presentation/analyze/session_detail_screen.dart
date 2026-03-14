@@ -2,17 +2,30 @@ import 'package:flutter/material.dart';
 
 import '../../analytics/session_repository.dart';
 
-class SessionDetailScreen extends StatelessWidget {
+class SessionDetailScreen extends StatefulWidget {
   const SessionDetailScreen({super.key, required this.sessionId});
 
   final int sessionId;
 
   @override
+  State<SessionDetailScreen> createState() => _SessionDetailScreenState();
+}
+
+class _SessionDetailScreenState extends State<SessionDetailScreen> {
+  late Future<_SessionDetailData?> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load(widget.sessionId);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Session #$sessionId')),
-      body: FutureBuilder<_SessionDetailData>(
-        future: _load(sessionId),
+      appBar: AppBar(title: Text('Session #${widget.sessionId}')),
+      body: FutureBuilder<_SessionDetailData?>(
+        future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());

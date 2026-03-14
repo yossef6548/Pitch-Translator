@@ -5,15 +5,30 @@ import '../../app/router.dart';
 import '../../domain/exercises/exercise_catalog.dart';
 import '../../domain/exercises/progress_snapshot.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late Future<_HomeData> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _loadHomeData();
+  }
+
+  void _retry() => setState(() => _future = _loadHomeData());
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),
       body: FutureBuilder<_HomeData>(
-        future: _loadHomeData(),
+        future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -21,7 +36,7 @@ class HomeScreen extends StatelessWidget {
           if (snapshot.hasError) {
             return Center(
               child: FilledButton.icon(
-                onPressed: () => (context as Element).markNeedsBuild(),
+                onPressed: _retry,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry loading home data'),
               ),
