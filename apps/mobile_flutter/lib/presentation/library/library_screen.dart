@@ -2,15 +2,28 @@ import 'package:flutter/material.dart';
 
 import '../../analytics/session_repository.dart';
 
-class LibraryScreen extends StatelessWidget {
+class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
+
+  @override
+  State<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends State<LibraryScreen> {
+  late Future<Map<String, int>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = SessionRepository.instance.libraryOverviewCounts();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Library')),
       body: FutureBuilder<Map<String, int>>(
-        future: SessionRepository.instance.libraryOverviewCounts(),
+        future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());

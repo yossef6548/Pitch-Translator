@@ -3,15 +3,30 @@ import 'package:flutter/material.dart';
 import '../../analytics/session_repository.dart';
 import 'session_detail_screen.dart';
 
-class AnalyzeOverviewScreen extends StatelessWidget {
+class AnalyzeOverviewScreen extends StatefulWidget {
   const AnalyzeOverviewScreen({super.key});
+
+  @override
+  State<AnalyzeOverviewScreen> createState() => _AnalyzeOverviewScreenState();
+}
+
+class _AnalyzeOverviewScreenState extends State<AnalyzeOverviewScreen> {
+  late Future<_AnalyzeData> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _loadData();
+  }
+
+  void _retry() => setState(() => _future = _loadData());
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Analyze')),
       body: FutureBuilder<_AnalyzeData>(
-        future: _loadData(),
+        future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -19,7 +34,7 @@ class AnalyzeOverviewScreen extends StatelessWidget {
           if (snapshot.hasError) {
             return Center(
               child: FilledButton.icon(
-                onPressed: () => (context as Element).markNeedsBuild(),
+                onPressed: _retry,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry analyze loading'),
               ),
