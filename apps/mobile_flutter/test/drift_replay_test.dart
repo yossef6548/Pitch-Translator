@@ -4,6 +4,7 @@ import 'package:pitch_translator/analytics/session_repository.dart';
 import 'package:pitch_translator/presentation/live_pitch/drift_replay_screen.dart';
 import 'package:pitch_translator/presentation/library/library_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   group('DriftEventWithSessionRecord', () {
@@ -139,30 +140,37 @@ void main() {
   });
 
   group('LibraryScreen', () {
+    setUpAll(() {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    });
+
     setUp(() {
       SharedPreferences.setMockInitialValues({'onboarding_complete': true});
     });
 
-    testWidgets('displays LIBRARY header', (tester) async {
+    tearDown(() async {
+      await SessionRepository.instance.close();
+    });
+
+    testWidgets('displays Library app bar title', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: LibraryScreen())),
       );
-      // Pump once to render the initial frame before async loads complete
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(find.text('Reference tones, choir presets, imported audio'), findsOneWidget);
+      expect(find.text('Library'), findsWidgets);
     });
 
-    testWidgets('shows empty drift replay message when no data is loaded',
+    testWidgets('shows library content sections after loading',
         (tester) async {
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: LibraryScreen())),
       );
-      // Allow the future to settle or fail gracefully (DB not available in test env)
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
 
-      // Either the empty message or the list header should be present
-      expect(find.text('Reference tones, choir presets, imported audio'), findsOneWidget);
+      expect(find.text('Reference tones'), findsOneWidget);
+      expect(find.text('Choir presets'), findsOneWidget);
     });
   });
 }
