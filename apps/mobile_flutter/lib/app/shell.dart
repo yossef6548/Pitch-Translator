@@ -7,14 +7,16 @@ import '../presentation/settings/settings_screen.dart';
 import '../presentation/train/train_catalog_screen.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({super.key, this.initialIndex = 0});
+
+  final int initialIndex;
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<AppShell> {
-  int _index = 0;
+  late int _index = widget.initialIndex;
 
   static final _tabs = <Widget>[
     const HomeScreen(),
