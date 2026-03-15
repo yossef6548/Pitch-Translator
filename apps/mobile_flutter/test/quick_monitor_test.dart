@@ -23,11 +23,13 @@ void main() {
     testWidgets('renders home screen with recommended exercise card',
         (tester) async {
       await tester.pumpWidget(const PitchTranslatorApp());
-      // runAsync allows the real sqflite FFI database future to complete outside
-      // the FakeAsync zone, so the FutureBuilder can transition to its loaded state.
-      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-      // pump() to render the FutureBuilder's completed (data-loaded) state.
-      await tester.pump();
+      // sqflite FFI uses isolate round-trips for each DB operation. Each
+      // runAsync+pump cycle drains one round-trip. DB open + schema creation
+      // (4 tables) + sequential data queries needs ~9 cycles; use 15 for safety.
+      for (var cycle = 0; cycle < 15; cycle++) {
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        await tester.pump();
+      }
 
       expect(find.text("Today's recommended exercise"), findsOneWidget);
       expect(find.text('Live'), findsOneWidget);
