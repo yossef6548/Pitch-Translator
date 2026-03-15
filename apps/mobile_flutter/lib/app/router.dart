@@ -104,9 +104,10 @@ Route<dynamic> onGenerateRoute(RouteSettings settings) {
       if (args == null) {
         return MaterialPageRoute(builder: (_) => const AppShell());
       }
+      final livePitchSettingsFuture = _loadLivePitchSettings();
       return MaterialPageRoute(
         builder: (_) => FutureBuilder<_LivePitchSettings>(
-          future: _loadLivePitchSettings(),
+          future: livePitchSettingsFuture,
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const Scaffold(body: Center(child: CircularProgressIndicator()));
