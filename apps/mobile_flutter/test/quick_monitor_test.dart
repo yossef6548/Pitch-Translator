@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitch_translator/analytics/session_repository.dart';
 import 'package:pitch_translator/main.dart';
+import 'package:pitch_translator/presentation/home/home_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -22,13 +23,20 @@ void main() {
 
     testWidgets('renders home screen with recommended exercise card',
         (tester) async {
-      await tester.pumpWidget(const PitchTranslatorApp());
-      // sqflite FFI dispatches each DB operation through a worker isolate.
-      // Future.delayed(Duration.zero) can fire before the isolate response
-      // arrives, so a fixed-count Duration.zero loop is unreliable. A single
-      // runAsync with a real-time window long enough for all isolate round-trips
-      // (DB open, 4-table schema creation, and sequential queries) to complete
-      // is more robust. 500 ms is well within the Flutter test timeout.
+      // Use an isolated in-memory repository so this test never touches the
+      // singleton's file-based DB.  In-memory SQLite via FFI completes schema
+      // creation and all queries in well under 500 ms even on slow CI runners.
+      final testRepo = SessionRepository.forTesting(
+        databasePathOverride: ':memory:',
+        databaseFactory: databaseFactoryFfi,
+      );
+      addTearDown(testRepo.close);
+
+      await tester.pumpWidget(MaterialApp(
+        home: HomeScreen(repositoryForTest: testRepo),
+      ));
+      // Give the FFI worker isolate time to open the in-memory DB, run the
+      // schema migration, and complete the four repository queries.
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 500)),
       );
