@@ -773,6 +773,7 @@ class SessionRepository {
         d.audio_snippet_uri,
         s.id AS session_id,
         s.mode_label,
+        s.level_id,
         s.exercise_id
       FROM drift_events d
       INNER JOIN sessions s ON s.id = d.session_id
@@ -787,6 +788,7 @@ class SessionRepository {
           (row) => DriftEventWithSessionRecord(
             sessionId: (row['session_id'] as num).toInt(),
             modeLabel: row['mode_label'] as String,
+            levelId: row['level_id'] as String,
             exerciseId: row['exercise_id'] as String,
             event: DriftEventRecord(
               id: row['id'] as int,

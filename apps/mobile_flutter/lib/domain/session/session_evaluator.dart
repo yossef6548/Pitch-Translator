@@ -1,5 +1,3 @@
-import 'package:pt_contracts/pt_contracts.dart';
-
 import '../exercises/exercise_catalog.dart';
 
 class SessionEvaluator {

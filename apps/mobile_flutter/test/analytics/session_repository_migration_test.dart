@@ -33,7 +33,7 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
-  test('fresh schema has all current v6 columns and indexes', () async {
+  test('fresh schema has all current v7 columns and indexes', () async {
     final dbPath = p.join(tempDir.path, 'fresh.db');
     final repository = SessionRepository.forTesting(databasePathOverride: dbPath);
     await repository.recentSessions(limit: 1);
@@ -41,7 +41,7 @@ void main() {
 
     final db = await openDatabase(dbPath);
     final versionRows = await db.rawQuery('PRAGMA user_version');
-    expect((versionRows.first['user_version'] as num).toInt(), 6);
+    expect((versionRows.first['user_version'] as num).toInt(), 7);
 
     final sessionColumns = await db.rawQuery('PRAGMA table_info(sessions)');
     final sessionColumnNames =
@@ -85,7 +85,7 @@ void main() {
     await db.close();
   });
 
-  test('upgrade from old version drops and recreates tables with v6 schema',
+  test('upgrade from old version drops and recreates tables with v7 schema',
       () async {
     final dbPath = p.join(tempDir.path, 'old_version.db');
 
@@ -122,7 +122,7 @@ void main() {
 
     final db = await openDatabase(dbPath);
     final versionRows = await db.rawQuery('PRAGMA user_version');
-    expect((versionRows.first['user_version'] as num).toInt(), 6);
+    expect((versionRows.first['user_version'] as num).toInt(), 7);
 
     final sessionColumns = await db.rawQuery('PRAGMA table_info(sessions)');
     final sessionColumnNames =
@@ -147,6 +147,7 @@ void main() {
     final sessionId = await repository.recordSession(
       exerciseId: 'relative_pitch',
       modeLabel: 'relative',
+      levelId: 'l1',
       startedAtMs: 1000,
       endedAtMs: 2000,
       avgErrorCents: 10,
@@ -159,7 +160,7 @@ void main() {
       await repository.recordAttempt(
         sessionId: sessionId,
         exerciseId: 'relative_pitch',
-        levelId: 'L1',
+        levelId: 'l1',
         assisted: false,
         success: true,
         avgErrorCents: value,

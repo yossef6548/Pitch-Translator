@@ -25,7 +25,9 @@ if [[ ! -d "$ANDROID_SDK_ROOT/cmdline-tools/latest" ]]; then
   popd >/dev/null
 fi
 
+set +o pipefail
 yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null
+set -o pipefail
 sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
   "platform-tools" \
   "platforms;android-${ANDROID_API}" \
