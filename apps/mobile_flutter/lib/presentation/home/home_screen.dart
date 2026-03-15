@@ -3,14 +3,10 @@ import 'package:flutter/material.dart';
 import '../../analytics/session_repository.dart';
 import '../../app/router.dart';
 import '../../domain/exercises/exercise_catalog.dart';
+import '../../domain/exercises/progress_snapshot.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.repositoryForTest});
-
-  /// Injected repository used only in tests. Production code leaves this null,
-  /// which causes the screen to fall back to [SessionRepository.instance].
-  @visibleForTesting
-  final SessionRepository? repositoryForTest;
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -138,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<_HomeData> _loadHomeData() async {
-    final repo = widget.repositoryForTest ?? SessionRepository.instance;
+    final repo = SessionRepository.instance;
     final mastered = await repo.masteredExerciseLevelKeys();
     final snapshot = ProgressSnapshot(mastered: mastered);
 

@@ -15,7 +15,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void initState() {
     super.initState();
-    _future = SessionRepository.instance.libraryCounts();
+    _future = SessionRepository.instance.libraryOverviewCounts();
   }
 
   @override
