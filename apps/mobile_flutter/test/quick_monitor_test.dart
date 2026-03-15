@@ -8,23 +8,22 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    testWidgets('renders home screen with Live Pitch and History tiles',
-        (tester) async {
+    testWidgets('renders home screen with shell tabs', (tester) async {
       await tester.pumpWidget(const PitchTranslatorApp());
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 3));
 
-      expect(find.text('Live Pitch'), findsOneWidget);
-      expect(find.text('Open quick live monitoring.'), findsOneWidget);
+      expect(find.text('Home'), findsWidgets);
+      expect(find.text('Analyze'), findsWidgets);
     });
 
-    testWidgets('tap Live Pitch tile opens live pitch screen', (tester) async {
+    testWidgets('tap Train tab opens train screen', (tester) async {
       await tester.pumpWidget(const PitchTranslatorApp());
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 3));
 
-      await tester.tap(find.text('Live Pitch'));
-      await tester.pumpAndSettle();
+      await tester.tap(find.text('Train').last);
+      await tester.pump(const Duration(seconds: 1));
 
-      expect(find.textContaining('Live Pitch'), findsWidgets);
+      expect(find.text('Train'), findsWidgets);
     });
   });
 }

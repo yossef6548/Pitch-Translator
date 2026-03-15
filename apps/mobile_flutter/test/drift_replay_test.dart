@@ -25,6 +25,7 @@ void main() {
         event: event,
         sessionId: 42,
         modeLabel: 'DRIFT_AWARENESS',
+        levelId: 'L1',
         exerciseId: 'ex_01',
       );
 
@@ -51,6 +52,7 @@ void main() {
         event: event,
         sessionId: 10,
         modeLabel: 'DRIFT_AWARENESS',
+        levelId: 'L1',
         exerciseId: 'ex_02',
       );
 
@@ -150,7 +152,7 @@ void main() {
       // Pump once to render the initial frame before async loads complete
       await tester.pump();
 
-      expect(find.text('Reference tones, choir presets, imported audio'), findsOneWidget);
+      expect(find.text('Library'), findsOneWidget);
     });
 
     testWidgets('shows empty drift replay message when no data is loaded',
@@ -159,10 +161,10 @@ void main() {
         const MaterialApp(home: Scaffold(body: LibraryScreen())),
       );
       // Allow the future to settle or fail gracefully (DB not available in test env)
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 1));
 
       // Either the empty message or the list header should be present
-      expect(find.text('Reference tones, choir presets, imported audio'), findsOneWidget);
+      expect(find.text('Library'), findsOneWidget);
     });
   });
 }

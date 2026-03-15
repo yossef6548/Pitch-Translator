@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pt_contracts/pt_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/exercises/exercise_catalog.dart';
@@ -109,10 +110,17 @@ Route<dynamic> onGenerateRoute(RouteSettings settings) {
         builder: (_) => FutureBuilder<_LivePitchSettings>(
           future: livePitchSettingsFuture,
           builder: (context, snapshot) {
-            if (!snapshot.hasData) {
+            if (snapshot.connectionState != ConnectionState.done) {
               return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
-            final loaded = snapshot.data!;
+            final loaded = snapshot.data ??
+                const _LivePitchSettings(
+                  numericOverlay: true,
+                  haptics: true,
+                  storeAnalytics: true,
+                  voicePrompts: false,
+                  profile: 'Standard',
+                );
             final baseConfig = args.exercise.configForLevel(args.level);
             final config = _applyProfileConfig(baseConfig, loaded);
             return LivePitchScreen(

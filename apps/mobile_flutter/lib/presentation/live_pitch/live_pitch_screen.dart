@@ -2,9 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:pt_contracts/pt_contracts.dart';
-
 import '../../domain/exercises/exercise_catalog.dart';
-import '../../domain/exercises/progression_engine.dart';
 import '../../domain/session/session_evaluator.dart';
 import 'live_pitch_controller.dart';
 import 'live_pitch_view_model.dart';
