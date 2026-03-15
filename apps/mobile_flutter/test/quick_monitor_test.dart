@@ -23,13 +23,16 @@ void main() {
     testWidgets('renders home screen with recommended exercise card',
         (tester) async {
       await tester.pumpWidget(const PitchTranslatorApp());
-      // sqflite FFI uses isolate round-trips for each DB operation. Each
-      // runAsync+pump cycle drains one round-trip. DB open + schema creation
-      // (4 tables) + sequential data queries needs ~9 cycles; use 15 for safety.
-      for (var cycle = 0; cycle < 15; cycle++) {
-        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-        await tester.pump();
-      }
+      // sqflite FFI dispatches each DB operation through a worker isolate.
+      // Future.delayed(Duration.zero) can fire before the isolate response
+      // arrives, so a fixed-count Duration.zero loop is unreliable. A single
+      // runAsync with a real-time window long enough for all isolate round-trips
+      // (DB open, 4-table schema creation, and sequential queries) to complete
+      // is more robust. 500 ms is well within the Flutter test timeout.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 500)),
+      );
+      await tester.pump();
 
       expect(find.text("Today's recommended exercise"), findsOneWidget);
       expect(find.text('Live'), findsOneWidget);
