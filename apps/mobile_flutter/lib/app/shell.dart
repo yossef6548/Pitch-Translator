@@ -16,7 +16,13 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  late int _index = widget.initialIndex;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+  }
 
   static final _tabs = <Widget>[
     const HomeScreen(),

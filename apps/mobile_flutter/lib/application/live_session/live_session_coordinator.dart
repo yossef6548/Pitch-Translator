@@ -22,9 +22,13 @@ class LiveSessionCoordinator {
     NativeAudioBridge? bridge,
     TrainingEngine? engine,
     SessionRepository? sessionRepository,
+    bool storeAnalytics = true,
+    bool voicePromptsEnabled = false,
   })  : _bridge = bridge ?? NativeAudioBridge(),
         _engine = engine ?? TrainingEngine(config: config),
-        _sessionRepository = sessionRepository ?? SessionRepository.instance;
+        _sessionRepository = sessionRepository ?? SessionRepository.instance,
+        _storeAnalytics = storeAnalytics,
+        _voicePromptsEnabled = voicePromptsEnabled;
 
   final ExerciseDefinition exercise;
   final LevelId level;
@@ -32,6 +36,8 @@ class LiveSessionCoordinator {
   final NativeAudioBridge _bridge;
   final TrainingEngine _engine;
   final SessionRepository _sessionRepository;
+  final bool _storeAnalytics;
+  final bool _voicePromptsEnabled;
 
   final _stateController = StreamController<LiveSessionState>.broadcast();
   LiveSessionState _state = const LiveSessionState(stage: LiveSessionStage.ready);
@@ -66,6 +72,9 @@ class LiveSessionCoordinator {
     }
 
     _resetMetrics();
+    if (_voicePromptsEnabled) {
+      AppLogger.info('Voice prompts placeholder hook: session starting');
+    }
     await _bridge.start();
     _frameSubscription = _bridge.frames().listen((frame) {
       if (!_firstFrameReceived) {
@@ -138,31 +147,34 @@ class LiveSessionCoordinator {
     final startedAtMs = endedAtMs - _activeDurationMs;
 
     try {
-      final sessionId = await _sessionRepository.recordSession(
-        exerciseId: exercise.id,
-        modeLabel: exercise.mode.name,
-        startedAtMs: startedAtMs,
-        endedAtMs: endedAtMs,
-        avgErrorCents: metrics.avgErrorCents,
-        stabilityCents: metrics.stabilityCents,
-        lockRatio: metrics.lockRatio,
-        driftCount: metrics.driftCount,
-      );
-
-      await _sessionRepository.recordAttempt(
-        sessionId: sessionId,
-        exerciseId: exercise.id,
-        levelId: level.name,
-        assisted: false,
-        success: metrics.lockRatio > 0,
-        avgErrorCents: metrics.avgErrorCents,
-      );
-
-      if (_driftEvents.isNotEmpty) {
-        await _sessionRepository.recordDriftEvents(
-          sessionId: sessionId,
-          events: _driftEvents,
+      if (_storeAnalytics) {
+        final sessionId = await _sessionRepository.recordSession(
+          exerciseId: exercise.id,
+          levelId: level.name,
+          modeLabel: exercise.mode.name,
+          startedAtMs: startedAtMs,
+          endedAtMs: endedAtMs,
+          avgErrorCents: metrics.avgErrorCents,
+          stabilityCents: metrics.stabilityCents,
+          lockRatio: metrics.lockRatio,
+          driftCount: metrics.driftCount,
         );
+
+        await _sessionRepository.recordAttempt(
+          sessionId: sessionId,
+          exerciseId: exercise.id,
+          levelId: level.name,
+          assisted: false,
+          success: metrics.lockRatio > 0,
+          avgErrorCents: metrics.avgErrorCents,
+        );
+
+        if (_driftEvents.isNotEmpty) {
+          await _sessionRepository.recordDriftEvents(
+            sessionId: sessionId,
+            events: _driftEvents,
+          );
+        }
       }
     } catch (error) {
       AppLogger.error('Session persistence failure', error);

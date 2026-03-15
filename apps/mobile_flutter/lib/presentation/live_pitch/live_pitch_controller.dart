@@ -15,11 +15,15 @@ class LivePitchController extends ChangeNotifier {
     required this.level,
     required this.config,
     LiveSessionCoordinator? coordinator,
+    bool storeAnalytics = true,
+    bool voicePromptsEnabled = false,
   }) : _coordinator = coordinator ??
             LiveSessionCoordinator(
               exercise: exercise,
               level: level,
               config: config,
+              storeAnalytics: storeAnalytics,
+              voicePromptsEnabled: voicePromptsEnabled,
             );
 
   final ExerciseDefinition exercise;
@@ -94,9 +98,10 @@ class LivePitchController extends ChangeNotifier {
       case LiveSessionFailure.unsupportedDevice:
         return LivePitchFailureState.unsupportedDevice;
       case LiveSessionFailure.audioInterrupted:
-      case LiveSessionFailure.persistenceFailed:
       case LiveSessionFailure.unknown:
         return LivePitchFailureState.audioInterrupted;
+      case LiveSessionFailure.persistenceFailed:
+        return LivePitchFailureState.persistenceFailed;
       case null:
         return null;
     }

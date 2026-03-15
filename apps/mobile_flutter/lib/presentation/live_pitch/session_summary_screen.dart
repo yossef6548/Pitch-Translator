@@ -11,6 +11,7 @@ class SessionSummaryArgs {
     required this.lockRatio,
     required this.driftCount,
     required this.stability,
+    required this.passed,
   });
 
   final ExerciseDefinition exercise;
@@ -19,14 +20,13 @@ class SessionSummaryArgs {
   final double lockRatio;
   final int driftCount;
   final double stability;
+  final bool passed;
 }
 
 class SessionSummaryScreen extends StatelessWidget {
   const SessionSummaryScreen({super.key, required this.args});
 
   final SessionSummaryArgs args;
-
-  bool get _passed => args.lockRatio >= 0.5 && args.avgError <= 35;
 
   @override
   Widget build(BuildContext context) {
@@ -38,10 +38,10 @@ class SessionSummaryScreen extends StatelessWidget {
           Card(
             child: ListTile(
               leading: Icon(
-                _passed ? Icons.emoji_events : Icons.refresh,
-                color: _passed ? Colors.green : Colors.orange,
+                args.passed ? Icons.emoji_events : Icons.refresh,
+                color: args.passed ? Colors.green : Colors.orange,
               ),
-              title: Text(_passed ? 'Pass' : 'Needs another attempt'),
+              title: Text(args.passed ? 'Pass' : 'Needs another attempt'),
               subtitle: Text('${args.exercise.name} • ${args.level.name.toUpperCase()}'),
             ),
           ),
@@ -51,21 +51,32 @@ class SessionSummaryScreen extends StatelessWidget {
           _metric('Drift events', '${args.driftCount}'),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil(
-              AppRoutes.analyze,
-              (route) => false,
+            onPressed: () => Navigator.of(context).pushReplacementNamed(
+              AppRoutes.livePitch,
+              arguments: LivePitchRouteArgs(exercise: args.exercise, level: args.level),
             ),
-            icon: const Icon(Icons.analytics),
-            label: const Text('View in Analyze'),
+            icon: const Icon(Icons.replay),
+            label: const Text('Retry exercise'),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.train),
+            icon: const Icon(Icons.skip_next),
+            label: const Text('Next exercise'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.analyze),
+            icon: const Icon(Icons.analytics),
+            label: const Text('View analytics'),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
             onPressed: () => Navigator.of(context).pushNamedAndRemoveUntil(
-              AppRoutes.train,
+              AppRoutes.home,
               (route) => false,
             ),
-            icon: const Icon(Icons.school),
-            label: const Text('Start next exercise'),
+            child: const Text('Back to home'),
           ),
         ],
       ),

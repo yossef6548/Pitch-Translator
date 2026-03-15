@@ -7,6 +7,7 @@ enum LivePitchFailureState {
   noInputDetected,
   unsupportedDevice,
   audioInterrupted,
+  persistenceFailed,
 }
 
 class LivePitchViewModel {
