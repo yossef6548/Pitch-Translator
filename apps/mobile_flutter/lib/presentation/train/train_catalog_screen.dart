@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../analytics/session_repository.dart';
 import '../../app/router.dart';
 import '../../domain/exercises/exercise_catalog.dart';
+import '../../domain/exercises/progress_snapshot.dart';
 
 class TrainCatalogScreen extends StatefulWidget {
   const TrainCatalogScreen({super.key});
