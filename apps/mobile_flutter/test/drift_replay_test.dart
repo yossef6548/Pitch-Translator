@@ -171,10 +171,13 @@ void main() {
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: LibraryScreen())),
       );
-      // runAsync lets the real sqflite FFI future complete outside FakeAsync,
-      // then pump() renders the FutureBuilder's loaded state.
-      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-      await tester.pump();
+      // sqflite FFI uses isolate round-trips for each DB operation. Each
+      // runAsync+pump cycle drains one round-trip. DB open + schema creation
+      // (4 tables) + 3 sequential queries needs ~8 cycles; use 15 for safety.
+      for (var cycle = 0; cycle < 15; cycle++) {
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        await tester.pump();
+      }
 
       expect(find.text('Reference tones'), findsOneWidget);
       expect(find.text('Choir presets'), findsOneWidget);
