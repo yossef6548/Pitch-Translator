@@ -147,7 +147,7 @@ void main() {
     final sessionId = await repository.recordSession(
       exerciseId: 'relative_pitch',
       modeLabel: 'relative',
-      levelId: 'L1',
+      levelId: 'l1',
       startedAtMs: 1000,
       endedAtMs: 2000,
       avgErrorCents: 10,
@@ -160,7 +160,7 @@ void main() {
       await repository.recordAttempt(
         sessionId: sessionId,
         exerciseId: 'relative_pitch',
-        levelId: 'L1',
+        levelId: 'l1',
         assisted: false,
         success: true,
         avgErrorCents: value,
