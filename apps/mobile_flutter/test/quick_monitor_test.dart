@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitch_translator/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,7 +24,7 @@ void main() {
       await tester.tap(find.text('Train').last);
       await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text('Train'), findsWidgets);
+      expect(find.widgetWithText(AppBar, 'Train'), findsOneWidget);
     });
   });
 }
