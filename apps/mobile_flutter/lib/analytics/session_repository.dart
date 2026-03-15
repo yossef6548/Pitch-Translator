@@ -7,6 +7,7 @@ class SessionRecord {
     required this.id,
     required this.exerciseId,
     required this.modeLabel,
+    required this.levelId,
     required this.startedAtMs,
     required this.endedAtMs,
     required this.avgErrorCents,
@@ -18,6 +19,7 @@ class SessionRecord {
   final int id;
   final String exerciseId;
   final String modeLabel;
+  final String levelId;
   final int startedAtMs;
   final int endedAtMs;
   final double avgErrorCents;
@@ -32,6 +34,7 @@ class SessionRecord {
       id: map['id'] as int,
       exerciseId: map['exercise_id'] as String,
       modeLabel: map['mode_label'] as String,
+      levelId: map['level_id'] as String? ?? 'l1',
       startedAtMs: map['started_at_ms'] as int,
       endedAtMs: map['ended_at_ms'] as int,
       avgErrorCents: (map['avg_error_cents'] as num).toDouble(),
@@ -153,12 +156,14 @@ class DriftEventWithSessionRecord {
     required this.event,
     required this.sessionId,
     required this.modeLabel,
+    required this.levelId,
     required this.exerciseId,
   });
 
   final DriftEventRecord event;
   final int sessionId;
   final String modeLabel;
+  final String levelId;
   final String exerciseId;
 }
 
@@ -228,7 +233,7 @@ class SessionRepository {
     _db = await factory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
-        version: 6,
+        version: 7,
         onCreate: (db, version) async => _createSchema(db),
         onUpgrade: (db, oldVersion, newVersion) async {
           // Drop in reverse foreign-key dependency order before recreating.
@@ -274,6 +279,7 @@ class SessionRepository {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         exercise_id TEXT NOT NULL,
         mode_label TEXT NOT NULL,
+        level_id TEXT NOT NULL DEFAULT 'l1',
         started_at_ms INTEGER NOT NULL,
         ended_at_ms INTEGER NOT NULL,
         avg_error_cents REAL NOT NULL,
@@ -334,6 +340,7 @@ class SessionRepository {
   Future<int> recordSession({
     required String exerciseId,
     required String modeLabel,
+    required String levelId,
     required int startedAtMs,
     required int endedAtMs,
     required double avgErrorCents,
@@ -345,6 +352,7 @@ class SessionRepository {
     return db.insert('sessions', {
       'exercise_id': exerciseId,
       'mode_label': modeLabel,
+      'level_id': levelId,
       'started_at_ms': startedAtMs,
       'ended_at_ms': endedAtMs,
       'avg_error_cents': avgErrorCents,

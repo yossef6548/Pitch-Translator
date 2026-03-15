@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:pt_contracts/pt_contracts.dart';
 
 import '../../domain/exercises/exercise_catalog.dart';
+import '../../domain/exercises/progression_engine.dart';
+import '../../domain/session/session_evaluator.dart';
 import 'live_pitch_controller.dart';
 import 'live_pitch_view_model.dart';
 import 'widgets/live_pitch_meter.dart';
@@ -17,11 +19,15 @@ class LivePitchScreen extends StatefulWidget {
     required this.exercise,
     required this.level,
     required this.config,
+    this.storeAnalytics = true,
+    this.voicePromptsEnabled = false,
   });
 
   final ExerciseDefinition exercise;
   final LevelId level;
   final ExerciseConfig config;
+  final bool storeAnalytics;
+  final bool voicePromptsEnabled;
 
   @override
   State<LivePitchScreen> createState() => _LivePitchScreenState();
@@ -30,6 +36,7 @@ class LivePitchScreen extends StatefulWidget {
 class _LivePitchScreenState extends State<LivePitchScreen>
     with WidgetsBindingObserver {
   late final LivePitchController _controller;
+  final SessionEvaluator _sessionEvaluator = const SessionEvaluator();
   bool _didRouteToSummary = false;
 
   @override
@@ -39,6 +46,8 @@ class _LivePitchScreenState extends State<LivePitchScreen>
       exercise: widget.exercise,
       level: widget.level,
       config: widget.config,
+      storeAnalytics: widget.storeAnalytics,
+      voicePromptsEnabled: widget.voicePromptsEnabled,
     );
     WidgetsBinding.instance.addObserver(this);
     _controller.init();
@@ -78,7 +87,10 @@ class _LivePitchScreenState extends State<LivePitchScreen>
         animation: _controller,
         builder: (context, _) {
           final vm = _controller.viewModel;
-          if (vm.sessionStage == LivePitchSessionStage.completed && !_didRouteToSummary) {
+          final shouldRouteToSummary =
+              vm.sessionStage == LivePitchSessionStage.completed &&
+              vm.failureState == null;
+          if (shouldRouteToSummary && !_didRouteToSummary) {
             _didRouteToSummary = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
@@ -91,6 +103,15 @@ class _LivePitchScreenState extends State<LivePitchScreen>
                   lockRatio: vm.lockRatio,
                   driftCount: vm.driftCount,
                   stability: vm.stabilityCents,
+                  passed: _sessionEvaluator.passed(
+                    SessionMetrics(
+                      avgError: vm.avgErrorCents,
+                      stability: vm.stabilityCents,
+                      lockRatio: vm.lockRatio,
+                      driftCount: vm.driftCount,
+                    ),
+                    widget.config,
+                  ),
                 ),
               );
             });
@@ -110,7 +131,8 @@ class _LivePitchScreenState extends State<LivePitchScreen>
                 ),
                 const SizedBox(height: 16),
                 Text('State: ${vm.uiState.id.name}'),
-                Text('Cents: ${vm.uiState.displayCents} ${vm.uiState.arrow}'),
+                if (widget.config.showNumericOverlay)
+                  Text('Cents: ${vm.uiState.displayCents} ${vm.uiState.arrow}'),
                 const SizedBox(height: 16),
                 if (vm.errorMessage != null) ...[
                   _FailureStateCard(

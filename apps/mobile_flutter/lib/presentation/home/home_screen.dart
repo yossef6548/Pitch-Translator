@@ -69,7 +69,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     AppRoutes.livePitch,
                     arguments: LivePitchRouteArgs(
                       exercise: ExerciseCatalog.byId(data.latestSession!.exerciseId),
-                      level: LevelId.l1,
+                      level: LevelId.values.firstWhere(
+                        (value) => value.name == data.latestSession!.levelId,
+                        orElse: () => LevelId.l1,
+                      ),
                     ),
                   ),
                 ),
