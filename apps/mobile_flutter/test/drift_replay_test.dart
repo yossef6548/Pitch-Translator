@@ -157,7 +157,11 @@ void main() {
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: LibraryScreen())),
       );
-      await tester.pumpAndSettle();
+      // pump() instead of pumpAndSettle(): the CircularProgressIndicator shown
+      // while the DB future is pending has an infinite animation that prevents
+      // pumpAndSettle from settling. The LibraryScreen AppBar is rendered on
+      // the first frame before any async data loads.
+      await tester.pump();
 
       expect(find.text('Library'), findsWidgets);
     });
@@ -167,7 +171,10 @@ void main() {
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: LibraryScreen())),
       );
-      await tester.pumpAndSettle();
+      // runAsync lets the real sqflite FFI future complete outside FakeAsync,
+      // then pump() renders the FutureBuilder's loaded state.
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
 
       expect(find.text('Reference tones'), findsOneWidget);
       expect(find.text('Choir presets'), findsOneWidget);

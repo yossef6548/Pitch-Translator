@@ -21,7 +21,11 @@ void main() {
 
   testWidgets('shows home screen with bottom navigation bar', (tester) async {
     await tester.pumpWidget(const PitchTranslatorApp());
-    await tester.pumpAndSettle();
+    // pump() instead of pumpAndSettle(): the loading screen shows a
+    // CircularProgressIndicator (infinite animation) while the DB future is
+    // pending, which would cause pumpAndSettle to never settle.
+    // The NavigationBar is rendered immediately, before any async data loads.
+    await tester.pump();
 
     expect(find.text('Home'), findsWidgets);
     expect(find.text('Train'), findsWidgets);
@@ -31,7 +35,7 @@ void main() {
 
   testWidgets('tapping Train tab navigates to train catalog', (tester) async {
     await tester.pumpWidget(const PitchTranslatorApp());
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     await tester.tap(
       find.descendant(
@@ -39,7 +43,9 @@ void main() {
         matching: find.text('Train'),
       ),
     );
-    await tester.pumpAndSettle();
+    // pump() to process the tap and render the new tab. The TrainCatalogScreen
+    // AppBar title 'Train' is visible immediately, before its data future resolves.
+    await tester.pump();
 
     expect(find.textContaining('Train'), findsWidgets);
   });
@@ -47,7 +53,7 @@ void main() {
   testWidgets('tapping Analyze tab navigates to analyze screen',
       (tester) async {
     await tester.pumpWidget(const PitchTranslatorApp());
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     await tester.tap(
       find.descendant(
@@ -55,7 +61,7 @@ void main() {
         matching: find.text('Analyze'),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.textContaining('Analyze'), findsWidgets);
   });
@@ -63,10 +69,10 @@ void main() {
   testWidgets('tapping Settings tab navigates to settings screen',
       (tester) async {
     await tester.pumpWidget(const PitchTranslatorApp());
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Settings'), findsWidgets);
   });
