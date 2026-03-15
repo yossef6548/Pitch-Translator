@@ -23,7 +23,11 @@ void main() {
     testWidgets('renders home screen with recommended exercise card',
         (tester) async {
       await tester.pumpWidget(const PitchTranslatorApp());
-      await tester.pumpAndSettle();
+      // runAsync allows the real sqflite FFI database future to complete outside
+      // the FakeAsync zone, so the FutureBuilder can transition to its loaded state.
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      // pump() to render the FutureBuilder's completed (data-loaded) state.
+      await tester.pump();
 
       expect(find.text("Today's recommended exercise"), findsOneWidget);
       expect(find.text('Live'), findsOneWidget);
@@ -32,7 +36,8 @@ void main() {
     testWidgets('tapping Train navigation item shows train catalog',
         (tester) async {
       await tester.pumpWidget(const PitchTranslatorApp());
-      await tester.pumpAndSettle();
+      // pump() instead of pumpAndSettle() to avoid infinite-animation timeout.
+      await tester.pump();
 
       await tester.tap(
         find.descendant(
@@ -40,7 +45,9 @@ void main() {
           matching: find.text('Train'),
         ),
       );
-      await tester.pumpAndSettle();
+      // pump() to process the tab switch; TrainCatalogScreen AppBar is rendered
+      // immediately before its data future resolves.
+      await tester.pump();
 
       expect(find.textContaining('Train'), findsWidgets);
     });
