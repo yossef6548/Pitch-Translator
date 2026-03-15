@@ -1,13 +1,15 @@
 import 'package:pt_contracts/pt_contracts.dart';
 
-import '../exercises/progression_engine.dart';
+import '../exercises/exercise_catalog.dart';
 
 class SessionEvaluator {
   const SessionEvaluator();
 
-  bool passed(SessionMetrics metrics, ExerciseConfig config) {
-    return metrics.lockRatio >= 0.6 &&
-        metrics.avgError <= config.toleranceCents * 1.5 &&
-        metrics.driftCount <= 3;
+  bool passed(SessionMetrics metrics, LevelId level) {
+    return const MasteryEvaluator().evaluate(
+      level: level,
+      metrics: metrics,
+      assisted: false,
+    );
   }
 }

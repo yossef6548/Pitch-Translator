@@ -110,7 +110,7 @@ class _LivePitchScreenState extends State<LivePitchScreen>
                       lockRatio: vm.lockRatio,
                       driftCount: vm.driftCount,
                     ),
-                    widget.config,
+                    widget.level,
                   ),
                 ),
               );
