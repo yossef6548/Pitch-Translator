@@ -8,6 +8,8 @@ import 'live_pitch_controller.dart';
 import 'live_pitch_view_model.dart';
 import 'widgets/live_pitch_meter.dart';
 import 'widgets/session_metrics_panel.dart';
+import '../../app/router.dart';
+import 'session_summary_screen.dart';
 
 class LivePitchScreen extends StatefulWidget {
   const LivePitchScreen({
@@ -28,6 +30,7 @@ class LivePitchScreen extends StatefulWidget {
 class _LivePitchScreenState extends State<LivePitchScreen>
     with WidgetsBindingObserver {
   late final LivePitchController _controller;
+  bool _didRouteToSummary = false;
 
   @override
   void initState() {
@@ -75,6 +78,23 @@ class _LivePitchScreenState extends State<LivePitchScreen>
         animation: _controller,
         builder: (context, _) {
           final vm = _controller.viewModel;
+          if (vm.sessionStage == LivePitchSessionStage.completed && !_didRouteToSummary) {
+            _didRouteToSummary = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              Navigator.of(context).pushReplacementNamed(
+                AppRoutes.sessionSummary,
+                arguments: SessionSummaryArgs(
+                  exercise: widget.exercise,
+                  level: widget.level,
+                  avgError: vm.avgErrorCents,
+                  lockRatio: vm.lockRatio,
+                  driftCount: vm.driftCount,
+                  stability: vm.stabilityCents,
+                ),
+              );
+            });
+          }
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
